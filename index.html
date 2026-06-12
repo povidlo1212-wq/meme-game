@@ -102,8 +102,15 @@ input:focus{border-color:#3a7bd5;}
 .cw.jp .cf:hover{transform:translateY(-6px) scale(1.04);border-color:#FFD600;}
 .cf{border-radius:8px;overflow:hidden;border:2.5px solid rgba(255,255,255,.35);transition:transform .2s,border-color .2s,box-shadow .2s;background:#0f1f4a;}
 .cf img{display:block;width:100%;height:100%;object-fit:cover;}
-@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-.card-reveal img{animation:fadeIn .4s ease forwards;}
+
+/* Анимация переворота карты */
+.card-flip-wrap{perspective:800px;display:inline-block;}
+.card-flip-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .6s ease;}
+.card-flip-inner.flipped{transform:rotateY(180deg);}
+.card-flip-front,.card-flip-back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:6px;overflow:hidden;}
+.card-flip-back{transform:rotateY(180deg);}
+.cw.jp .card-flip-wrap:hover{cursor:pointer;}
+.cw.jp .card-flip-inner:hover{transform:rotateY(180deg) translateY(-6px) scale(1.04);}
 .cw.wn .cf{border:3.5px solid #FFD600!important;box-shadow:0 0 0 3px #FFD600,0 0 28px #FFD600;transform:translateY(-8px) scale(1.05);}
 .cw.rv:not(.wn) .cf{border-color:rgba(255,255,255,.2);}
 .cn{font-size:.62rem;font-weight:800;color:rgba(255,255,255,.9);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0;transition:opacity .3s;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:4px;max-width:100%;}
