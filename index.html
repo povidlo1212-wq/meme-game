@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -198,7 +199,7 @@ input:focus{border-color:#3a7bd5;}
     <div class="home-cover-box"><img src="https://i.ibb.co/zKkqdX9/image.jpg" alt="Мемы" loading="eager"></div>
     <div class="home-card">
       <label>Твой ник</label>
-      <input type="text" id="h-nick" placeholder="Введи никнейм..." maxlength="16">
+      <input type="text" id="h-nick" placeholder="Введи никнейм..." maxlength="16" onkeydown="if(event.key==='Enter'){this.blur();}" onkeyup="if(event.key==='Enter'){this.blur();}">
       <label style="margin-top:8px">До скольки очков?</label>
       <div class="score-picker">
         <button class="score-btn" onclick="sndClick();setScore(5,this)">5</button>
@@ -212,7 +213,7 @@ input:focus{border-color:#3a7bd5;}
       <button class="btn btn-y btn-full" onclick="sndClick();createRoom()">🎮 Создать комнату</button>
       <div class="divider">— или —</div>
       <label>Код комнаты</label>
-      <input type="text" id="h-code" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;font-size:1.3rem;text-align:center">
+      <input type="text" id="h-code" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;font-size:1.3rem;text-align:center" onkeydown="if(event.key==='Enter'){this.blur();}" onkeyup="if(event.key==='Enter'){this.blur();}">
       <button class="btn btn-b btn-full" onclick="sndClick();joinRoom()">🚪 Войти</button>
       <button class="btn btn-full" onclick="sndClick();openRules()" style="background:rgba(20,40,100,.75);color:#FFD600;border:2px solid #FFD600;margin-top:6px;font-family:'Russo One',sans-serif;letter-spacing:1px;">📖 Правила игры</button>
     </div>
