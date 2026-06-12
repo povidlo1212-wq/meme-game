@@ -435,8 +435,25 @@ function sendAction(data){if(isHost){hostHandleAction(data);return;}if(channel)t
 function onMsg(type,data){if(type==='state')applyState(data);else if(type==='winner_strip')showWinnerStrip(data.txt);else if(type==='hide_winner')hideWinnerStrip();else if(type==='join_request'&&isHost)hostJoin(data);else if(type==='action'&&isHost)hostHandleAction(data);}
 
 function applyState(state){var pPh=lastPhase,pSi=lastSitIdx,pPaused=paused;G=state;paused=G.paused||false;var ph=G.phase,si=G.sitIdx||0;
-  // предзагружаем картинки сданных карт в фоне
-  if(ph==='submitting'||ph==='judging'){Object.values(G.submissions||{}).forEach(function(m){if(m&&m.url)preloadImg(m.url);});}var phChanged=ph!==pPh,siChanged=(ph==='sit-choose'&&si!==pSi);if(phChanged){lastPhase=ph;lastSitIdx=si;_lastCenterKey='';stopAllBars();if(ph!=='results')hideWinnerStrip();if(ph==='judging'||ph==='results'){selCard=null;selEl=null;document.querySelectorAll('.hcard,.mob-hcard').forEach(function(c){c.classList.remove('sel');});var bp=$('btn-play');if(bp)bp.style.display='none';var mbp=$('mob-btn-play');if(mbp)mbp.style.display='none';}}else if(siChanged){lastSitIdx=si;_lastCenterKey='';if(sitPerRaf){cancelAnimationFrame(sitPerRaf);sitPerRaf=null;}}if(paused&&!pPaused)pauseVisualTimers();else if(!paused&&pPaused)resumeVisualTimers();renderAll();renderPause();if(phChanged){if(ph==='sit-choose')startSitPerBar(10000);if(ph==='submitting'){startSubBar(15000);hideWinnerStrip();}if(ph==='judging'){startJudgeBar(15000);hideWinnerStrip();}}else if(siChanged&&!paused)startSitPerBar(10000);}
+  // обновляем winner подсветку на существующих картах без перерисовки
+  if(G.roundWinner&&(G.phase==='results'||G.phase==='judging')){
+    var cz2=$('center-el');
+    if(cz2)cz2.querySelectorAll('.cw').forEach(function(el){
+      var pid=el.dataset.pid;
+      if(pid){
+        el.classList.toggle('wn',pid===G.roundWinner);
+        el.classList.toggle('rv',G.phase==='results');
+      }
+    });
+    var mc=$('mob-cards');
+    if(mc)mc.querySelectorAll('.cw').forEach(function(el){
+      var pid=el.dataset.pid;
+      if(pid){
+        el.classList.toggle('wn',pid===G.roundWinner);
+        el.classList.toggle('rv',G.phase==='results');
+      }
+    });
+  }var phChanged=ph!==pPh,siChanged=(ph==='sit-choose'&&si!==pSi);if(phChanged){lastPhase=ph;lastSitIdx=si;_lastCenterKey='';stopAllBars();if(ph!=='results')hideWinnerStrip();if(ph==='judging'||ph==='results'){selCard=null;selEl=null;document.querySelectorAll('.hcard,.mob-hcard').forEach(function(c){c.classList.remove('sel');});var bp=$('btn-play');if(bp)bp.style.display='none';var mbp=$('mob-btn-play');if(mbp)mbp.style.display='none';}}else if(siChanged){lastSitIdx=si;_lastCenterKey='';if(sitPerRaf){cancelAnimationFrame(sitPerRaf);sitPerRaf=null;}}if(paused&&!pPaused)pauseVisualTimers();else if(!paused&&pPaused)resumeVisualTimers();renderAll();renderPause();if(phChanged){if(ph==='sit-choose')startSitPerBar(10000);if(ph==='submitting'){startSubBar(15000);hideWinnerStrip();}if(ph==='judging'){startJudgeBar(15000);hideWinnerStrip();}}else if(siChanged&&!paused)startSitPerBar(10000);}
 
 function createRoom(){var nick=$('h-nick').value.trim();if(!nick)return;ME.nick=nick;ME.avUrl=pickAv();roomCode=genCode();isHost=true;$('lob-code').textContent=roomCode;$('lob-limit-lbl').textContent=selectedScore>0?('До '+selectedScore+' ★'):'Без лимита';HOST={code:roomCode,phase:'lobby',scoreLimit:selectedScore,paused:false,players:[{id:ME.id,nick:ME.nick,avUrl:ME.avUrl,score:0,isHost:true,hand:[],isBot:false}],judgeIdx:0,round:1,deck:[],discard:[],sitDeck:[],sitQueue:[],sitIdx:0,chosenSit:'',submissions:{},submittedBy:[],roundWinner:null,judgeOrder:[]};showScreen('s-lobby');renderLobby();connectAbly(roomCode,function(){$('btn-start').disabled=false;$('btn-bot').style.display='';broadcast(HOST);renderLobby();});}
 function joinRoom(){var nick=$('h-nick').value.trim(),code=$('h-code').value.trim().toUpperCase();if(!nick||code.length!==4)return;ME.nick=nick;ME.avUrl=pickAv();roomCode=code;isHost=false;$('lob-code').textContent=code;$('lob-status').textContent='Подключение...';$('btn-start').style.display='none';$('btn-bot').style.display='none';showScreen('s-lobby');connectAbly(code,function(){if(channel)try{channel.publish('join_request',{id:ME.id,nick:ME.nick,avUrl:ME.avUrl});}catch(e){}$('lob-status').textContent='Ожидаем начала...';});}
