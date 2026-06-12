@@ -109,8 +109,6 @@ input:focus{border-color:#3a7bd5;}
 .card-flip-inner.flipped{transform:rotateY(180deg);}
 .card-flip-front,.card-flip-back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:6px;overflow:hidden;}
 .card-flip-back{transform:rotateY(180deg);}
-.cw.jp .card-flip-wrap:hover{cursor:pointer;}
-.cw.jp .card-flip-inner:hover{transform:rotateY(180deg) translateY(-6px) scale(1.04);}
 .cw.wn .cf{border:3.5px solid #FFD600!important;box-shadow:0 0 0 3px #FFD600,0 0 28px #FFD600;transform:translateY(-8px) scale(1.05);}
 .cw.rv:not(.wn) .cf{border-color:rgba(255,255,255,.2);}
 .cn{font-size:.62rem;font-weight:800;color:rgba(255,255,255,.9);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0;transition:opacity .3s;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:4px;max-width:100%;}
@@ -401,6 +399,7 @@ var ablyClient=null,channel=null;
 var roundId=0,selCard=null,selEl=null,paused=false;
 var lastPhase='',lastSitIdx=-1,_lastCenterKey='',_lastJudgeOrderKey='';
 var judgeSwappedThisRound=false;
+var _flippedCards={}; // pid -> true, карты которые уже были перевёрнуты
 var _submitCardW=0,_submitCardH=0,_submitCardWMob=0,_submitCardHMob=0;
 
 var _ptimers={},_ptid=0,_gameIsPaused=false;
@@ -449,7 +448,7 @@ function goHome(){pclearAll();stopAllBars();if(ablyClient)try{ablyClient.close()
 function drawCard(p,state){if(!state.discard)state.discard=[];if(!state.deck||!state.deck.length){if(!state.discard.length)return;state.deck=shuffle(state.discard.slice());state.discard=[];}if(state.deck.length)p.hand.push(state.deck.shift());}
 function hostStartGame(){if(!isHost||!HOST)return;var deck=shuffle(MEMES.slice());HOST.players.forEach(function(p){p.hand=[];p.score=0;for(var i=0;i<7;i++)if(deck.length)p.hand.push(deck.shift());});HOST.deck=deck;HOST.discard=[];HOST.sitDeck=shuffle(SITUATIONS.slice());HOST.sitUsed=[];HOST.round=1;HOST.judgeIdx=0;HOST.paused=false;snd('startup',.35);HOST.players.forEach(function(p){(p.hand||[]).forEach(function(m){preloadImg(m.url);});});var bp=$('btn-pause');if(bp)bp.style.display='';beginSitChoose();}
 
-function beginSitChoose(){roundId++;judgeSwappedThisRound=false;_lastCenterKey='';
+function beginSitChoose(){roundId++;judgeSwappedThisRound=false;_flippedCards={};_lastCenterKey='';
   // сбрасываем флаг замены у текущего судьи
   if(HOST){var j=HOST.players[HOST.judgeIdx];if(j)j.hasSwapped=false;}var rid=roundId;if(!HOST.sitDeck||HOST.sitDeck.length<8){var used=HOST.sitUsed||[];var extra=SITUATIONS.filter(function(s){return!used.includes(s);});if(!extra.length){HOST.sitUsed=[];extra=SITUATIONS.slice();}HOST.sitDeck=shuffle((HOST.sitDeck||[]).concat(extra));}if(!HOST.sitUsed)HOST.sitUsed=[];HOST.sitQueue=HOST.sitDeck.slice(0,Math.min(8,HOST.sitDeck.length));HOST.sitIdx=0;HOST.phase='sit-choose';HOST.submissions={};HOST.submittedBy=[];HOST.roundWinner=null;HOST.judgeOrder=[];HOST.chosenSit='';broadcast(HOST);scheduleSitTimeout(rid);var j=HOST.players[HOST.judgeIdx];if(j.isBot)pgameTimeout(function(){if(rid===roundId&&HOST.phase==='sit-choose')hostConfirmSit(rid);},(1000+Math.random()*2000),'bot_sit_'+rid);}
 function scheduleSitTimeout(rid){pcancelTimeout('sit_auto_'+rid);pgameTimeout(function(){if(rid!==roundId||!HOST||HOST.phase!=='sit-choose')return;hostConfirmSit(rid);},10000,'sit_auto_'+rid);}
@@ -516,40 +515,21 @@ function renderMobile(){if(!G)return;renderMobPlayers();renderMobSit();renderMob
 function renderMobPlayers(){var el=$('mob-players');el.innerHTML='';if(!G)return;var judge=G.players[G.judgeIdx];G.players.forEach(function(p){var isJ=p.id===judge.id,isMe=p.id===ME.id;var d=document.createElement('div');d.className='mob-seat';d.innerHTML='<div class="mob-av'+(isJ?' jg':'')+'">'+mkImg(p.avUrl,34,34)+'</div><div class="mob-nick">'+p.nick+(p.isBot?' 🤖':'')+(isJ?' ⚖':'')+(isMe?' 👤':'')+'</div><div class="mob-score">'+(p.score||0)+'★</div>';el.appendChild(d);});}
 function renderMobSit(){var el=$('mob-sit');el.innerHTML='';if(!G)return;var judge=G.players[G.judgeIdx];var me=G.players.find(function(p){return p.id===ME.id;})||G.players[0];var amJ=me&&me.id===judge.id;if(G.phase==='sit-choose'){var cur=(G.sitQueue||[])[G.sitIdx]||'...';el.innerHTML='<div class="sit-chooser"><div class="sc-top"><span class="sc-lbl">⚖️ '+judge.nick+' выбирает</span><span style="font-size:.55rem;color:#aac4ff;font-weight:700">'+((G.sitIdx||0)+1)+'/'+Math.max(1,(G.sitQueue||[]).length)+'</span></div><div class="sc-cur">'+(amJ?cur:'🙈 '+judge.nick+' выбирает ситуацию...')+'</div>'+(amJ?'<div class="sc-btns"><button class="btn btn-b" style="flex:1;font-size:.7rem;min-height:32px" onclick="nextSit()">⏭ Следующая</button><button class="btn btn-y" style="flex:1;font-size:.7rem;min-height:32px" onclick="confirmSit()">✔ Выбрать</button></div>':'<div style="text-align:center;font-size:.68rem;color:#6a8aff;font-weight:700">Ждём выбора судьи...</div>')+'<div class="sit-bar"><div class="sit-fill" style="width:100%"></div></div></div>';}else{var judgeBarMob=G.phase==='judging'?'<div class="sit-bar" style="margin-top:4px"><div id="judge-fill-mob" style="width:100%;height:100%;background:#FFD600;border-radius:3px"></div></div>':'';var subBarMob=G.phase==='submitting'?'<div class="sit-bar" style="margin-top:4px"><div id="sub-fill" style="width:100%;height:100%;background:#FFD600;border-radius:3px"></div></div>':'';el.innerHTML='<div class="sit-card"><div class="sit-lbl">📋 СИТУАЦИЯ</div><div class="sit-txt">'+(G.chosenSit||'...')+'</div><div class="jg-lbl">⚖️ '+judge.nick+' — судья</div>'+subBarMob+judgeBarMob+'</div>';}}
 function renderMobCards(){var el=$('mob-cards');el.innerHTML='';if(!G)return;var judge=G.players[G.judgeIdx];var me=G.players.find(function(p){return p.id===ME.id;})||G.players[0];var phase=G.phase;var lo=getMobSubmitLayout();var cW=phase==='submitting'?lo.cardW:(_submitCardWMob||lo.cardW);var cH=phase==='submitting'?lo.cardH:(_submitCardHMob||lo.cardH);var isJudging=phase==='judging';var isResults=phase==='results';var cardIdx=0;
-function mkMobCard(p){
-  var submitted=(G.submittedBy||[]).includes(p.id);
-  var meme=(G.submissions||{})[p.id];
-  var isW=G.roundWinner===p.id;
-  var amJ=me&&me.id===judge.id;
-  var d=document.createElement('div');
-  d.style.cssText='flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:2px;';
-  if(phase==='submitting'){
-    d.innerHTML=submitted?'<div class="cf" style="width:'+cW+'px;height:'+cH+'px">'+mkCover(cW,cH)+'</div>':'<div class="wt" style="width:'+cW+'px;height:'+cH+'px">⏳</div>';
-  }else if((isJudging||isResults)&&meme&&meme.url){
-    d.className='cw'+(isW?' wn':'')+(isResults?' rv':'')+(amJ&&isJudging?' jp':'');
-    var wrap=document.createElement('div');
-    wrap.className='card-flip-wrap';
-    wrap.style.cssText='width:'+cW+'px;height:'+cH+'px;';
-    var inner=document.createElement('div');
-    inner.className='card-flip-inner';
-    inner.style.cssText='width:'+cW+'px;height:'+cH+'px;';
-    var front=document.createElement('div');
-    front.className='card-flip-front';
-    front.innerHTML=mkCover(cW,cH);
-    var back=document.createElement('div');
-    back.className='card-flip-back';
-    back.innerHTML='<img src="'+meme.url+'" width="'+cW+'" height="'+cH+'" style="object-fit:cover;display:block;">';
-    inner.appendChild(front);inner.appendChild(back);wrap.appendChild(inner);d.appendChild(wrap);
-    var delay=1000+cardIdx*120;
-    cardIdx++;
-    setTimeout(function(){inner.classList.add('flipped');},delay);
-    if(isResults){var cn=document.createElement('div');cn.className='cn';cn.style.cssText='opacity:1;max-width:'+cW+'px;';cn.textContent=p.nick;d.appendChild(cn);}
-    if(amJ&&isJudging){(function(pid,inner){wrap.onclick=function(){if(inner.classList.contains('flipped'))awardCard(pid);};})(p.id,inner);}
-  }else{
-    d.innerHTML='<div class="wt" style="width:'+cW+'px;height:'+cH+'px">—</div>';
-  }
-  return d;
-}
+function mkMobCard(p){var submitted=(G.submittedBy||[]).includes(p.id);var meme=(G.submissions||{})[p.id];var isW=G.roundWinner===p.id;var amJ=me&&me.id===judge.id;var d=document.createElement('div');d.style.cssText='flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:2px;';
+if(phase==='submitting'){d.innerHTML=submitted?'<div class="cf" style="width:'+cW+'px;height:'+cH+'px">'+mkCover(cW,cH)+'</div>':'<div class="wt" style="width:'+cW+'px;height:'+cH+'px">⏳</div>';}
+else if((isJudging||isResults)&&meme&&meme.url){
+d.className='cw'+(isW?' wn':'')+(isResults?' rv':'')+(amJ&&isJudging?' jp':'');
+var wrap=document.createElement('div');wrap.className='card-flip-wrap';wrap.style.cssText='width:'+cW+'px;height:'+cH+'px;';
+var inner=document.createElement('div');inner.className='card-flip-inner';inner.style.cssText='width:'+cW+'px;height:'+cH+'px;';
+var front=document.createElement('div');front.className='card-flip-front';front.innerHTML=mkCover(cW,cH);
+var back=document.createElement('div');back.className='card-flip-back';back.innerHTML='<img src="'+meme.url+'" width="'+cW+'" height="'+cH+'" style="object-fit:cover;display:block;">';
+inner.appendChild(front);inner.appendChild(back);wrap.appendChild(inner);d.appendChild(wrap);
+if(_flippedCards[p.id]){inner.style.transition='none';inner.classList.add('flipped');}
+else{var ci=cardIdx;var delay=1000+ci*150;cardIdx++;setTimeout(function(){inner.classList.add('flipped');_flippedCards[p.id]=true;},delay);}
+if(isResults){var cn=document.createElement('div');cn.className='cn';cn.style.cssText='opacity:1;max-width:'+cW+'px;';cn.textContent=p.nick;d.appendChild(cn);}
+if(amJ&&isJudging){(function(pid,inner){wrap.onclick=function(){if(inner.classList.contains('flipped'))awardCard(pid);};})(p.id,inner);}
+}else{d.innerHTML='<div class="wt" style="width:'+cW+'px;height:'+cH+'px">—</div>';}
+return d;}
 function mkRow(players){var row=document.createElement('div');row.style.cssText='display:flex;flex-direction:row;flex-wrap:nowrap;justify-content:center;align-items:flex-start;gap:'+lo.gap+'px;';players.forEach(function(p){row.appendChild(mkMobCard(p));});return row;}
 if(phase==='submitting'||phase==='judging'||phase==='results'){var wrap=document.createElement('div');wrap.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;';var idx=0;lo.rows.forEach(function(cnt){var slice=lo.nonJ.slice(idx,idx+cnt);idx+=cnt;wrap.appendChild(mkRow(slice));});el.appendChild(wrap);}}
 function renderMobHand(){var grid=$('mob-hand-grid');grid.innerHTML='';if(!G)return;var me=G.players.find(function(p){return p.id===ME.id;});if(!me)return;var judge=G.players[G.judgeIdx];var amJ=me.id===judge.id;var used=(G.submittedBy||[]).includes(ME.id);var canSwap=amJ&&!judgeSwappedThisRound&&(G.phase==='submitting'||G.phase==='judging');$('mob-av').innerHTML=mkImg(me.avUrl,22,22);$('mob-nick').textContent=me.nick+(amJ?' ⚖️':'');$('mob-pts').textContent=(me.score||0)+' ★';(me.hand||[]).forEach(function(m){var d=document.createElement('div');d.className='mob-hcard'+(selCard===m.id?' sel':'')+(used?' used':'')+(amJ&&!canSwap?' jc':'');d.style.position='relative';d.innerHTML='<div class="cf">'+mkImg(m.url,'100%','100%')+'</div>'+(canSwap?'<div class="swap-x swap-x-mob" onclick="event.stopPropagation();sndClick();swapJudgeCard(\''+m.id+'\')" title="Заменить карту">✕</div>':'');if(!amJ&&!used&&G.phase==='submitting'){d.addEventListener('click',function(){selectCard(m.id,d);});d.addEventListener('touchend',function(e){e.preventDefault();selectCard(m.id,d);});}else if(amJ&&G.phase==='judging'&&!canSwap)d.addEventListener('click',function(){sndError();});grid.appendChild(d);});}
