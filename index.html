@@ -104,12 +104,11 @@ input:focus{border-color:#3a7bd5;}
 .cf img{display:block;width:100%;height:100%;object-fit:cover;}
 
 /* Анимация переворота карты */
-.card-flip-wrap{perspective:800px;display:inline-block;border:none!important;background:transparent!important;}
+.card-flip-wrap{perspective:800px;display:inline-block;}
 .card-flip-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .6s ease;}
 .card-flip-inner.flipped{transform:rotateY(180deg);}
 .card-flip-front,.card-flip-back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:6px;overflow:hidden;}
-.card-flip-front{border:none!important;box-shadow:none!important;}
-.card-flip-back{transform:rotateY(180deg);border:2.5px solid rgba(255,255,255,.35);}
+.card-flip-back{transform:rotateY(180deg);}
 .cw.wn .cf{border:3.5px solid #FFD600!important;box-shadow:0 0 0 3px #FFD600,0 0 28px #FFD600;transform:translateY(-8px) scale(1.05);}
 .cw.rv:not(.wn) .cf{border-color:rgba(255,255,255,.2);}
 .cn{font-size:.62rem;font-weight:800;color:rgba(255,255,255,.9);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0;transition:opacity .3s;background:rgba(0,0,0,.55);padding:1px 6px;border-radius:4px;max-width:100%;}
