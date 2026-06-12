@@ -537,6 +537,7 @@ function mkMobCard(p){var submitted=(G.submittedBy||[]).includes(p.id);var meme=
 if(phase==='submitting'){d.innerHTML=submitted?'<div class="cf" style="width:'+cW+'px;height:'+cH+'px">'+mkCover(cW,cH)+'</div>':'<div class="wt" style="width:'+cW+'px;height:'+cH+'px">⏳</div>';}
 else if((isJudging||isResults)&&meme&&meme.url){
 d.className='cw'+(isW?' wn':'')+(isResults?' rv':'')+(amJ&&isJudging?' jp':'');
+d.dataset.pid=p.id;
 var wrap=document.createElement('div');wrap.className='card-flip-wrap';wrap.style.cssText='width:'+cW+'px;height:'+cH+'px;';
 var inner=document.createElement('div');inner.className='card-flip-inner';inner.style.cssText='width:'+cW+'px;height:'+cH+'px;';
 var front=document.createElement('div');front.className='card-flip-front';front.innerHTML=mkCover(cW,cH);
