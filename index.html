@@ -108,7 +108,7 @@ input:focus{border-color:#3a7bd5;}
 .mob-hcard.sel .cf{transform:translateY(-8px)!important;border-color:#FFD600!important;box-shadow:0 0 10px #FFD600!important;}
 /* Анимация переворота карты */
 .card-flip-wrap{perspective:800px;display:inline-block;}
-.card-flip-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .6s ease;}
+.card-flip-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .8s cubic-bezier(0.4,0,0.2,1);}
 .card-flip-inner.flipped{transform:rotateY(180deg);}
 .card-flip-front,.card-flip-back{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:6px;overflow:hidden;border:none;}
 .card-flip-back{transform:rotateY(180deg);}
@@ -533,7 +533,7 @@ var front=document.createElement('div');front.className='card-flip-front';front.
 var back=document.createElement('div');back.className='card-flip-back';back.innerHTML='<img src="'+meme.url+'" width="'+cW+'" height="'+cH+'" style="object-fit:cover;display:block;">';
 inner.appendChild(front);inner.appendChild(back);wrap.appendChild(inner);d.appendChild(wrap);
 if(_flippedCards[p.id]){inner.style.transition='none';inner.classList.add('flipped');if(isW){back.style.border='3.5px solid #FFD600';back.style.boxShadow='0 0 0 3px #FFD600,0 0 28px #FFD600';inner.style.transform='rotateY(180deg) translateY(-8px) scale(1.05)';}}
-else{var ci=cardIdx;var delay=ci*150;cardIdx++;(function(pid,inner,back,isW){setTimeout(function(){inner.classList.add('flipped');_flippedCards[pid]=true;if(isW){back.style.border='3.5px solid #FFD600';back.style.boxShadow='0 0 0 3px #FFD600,0 0 28px #FFD600';inner.style.transform='rotateY(180deg) translateY(-8px) scale(1.05)';}},delay);})(p.id,inner,back,isW);}
+else{var ci=cardIdx;var delay=ci*250;cardIdx++;(function(pid,inner,back,isW){setTimeout(function(){inner.classList.add('flipped');_flippedCards[pid]=true;if(isW){back.style.border='3.5px solid #FFD600';back.style.boxShadow='0 0 0 3px #FFD600,0 0 28px #FFD600';inner.style.transform='rotateY(180deg) translateY(-8px) scale(1.05)';}},delay);})(p.id,inner,back,isW);}
 if(isResults){var cn=document.createElement('div');cn.className='cn';cn.style.cssText='opacity:1;max-width:'+cW+'px;';cn.textContent=p.nick;d.appendChild(cn);}
 if(amJ&&isJudging){(function(pid,inner){wrap.onclick=function(){if(inner.classList.contains('flipped'))awardCard(pid);};})(p.id,inner);}
 }else{d.innerHTML='<div class="wt" style="width:'+cW+'px;height:'+cH+'px">—</div>';}
