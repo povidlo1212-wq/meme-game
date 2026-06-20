@@ -376,7 +376,7 @@ function fbStartHeartbeat(code){fbStopHeartbeat();fbHeartbeatTimer=setInterval(f
 function fbStopHeartbeat(){if(fbHeartbeatTimer){clearInterval(fbHeartbeatTimer);fbHeartbeatTimer=null;}}
 function fbUpdateRoomPlayers(code,count){if(!initFirebase())return;try{fbDB.ref('openRooms/'+code+'/players').set(count);}catch(e){}}
 function fbRemoveRoom(code){if(!initFirebase())return;try{fbDB.ref('openRooms/'+code).remove();}catch(e){}}
-function fbFindOpenRoom(cb){if(!initFirebase()){cb(null);return;}try{fbDB.ref('openRooms').limitToFirst(20).once('value').then(function(snap){var val=snap.val();if(!val){cb(null);return;}var codes=Object.keys(val);var now=Date.now();var valid=codes.filter(function(c){var r=val[c];return r&&r.players<10&&(now-(r.lastSeen||r.createdAt||0))<90000;});if(!valid.length){cb(null);return;}var pick=valid[Math.floor(Math.random()*valid.length)];cb(pick);}).catch(function(){cb(null);});}catch(e){cb(null);}}
+function fbFindOpenRoom(cb){if(!initFirebase()){cb(null);return;}try{fbDB.ref('openRooms').limitToFirst(20).once('value').then(function(snap){var val=snap.val();if(!val){cb(null);return;}var codes=Object.keys(val);var now=Date.now();var valid=[];codes.forEach(function(c){var r=val[c];var age=now-(r&&(r.lastSeen||r.createdAt)||0);if(!r||age>=90000){fbDB.ref('openRooms/'+c).remove().catch(function(){});}else if(r.players<10){valid.push(c);}});if(!valid.length){cb(null);return;}var pick=valid[Math.floor(Math.random()*valid.length)];cb(pick);}).catch(function(){cb(null);});}catch(e){cb(null);}}
 var COVER_URL='https://i.ibb.co/zKkqdX9/image.jpg';
 var T_PAUSE=20;
 var pauseBarRaf=null,pauseBarEnd=0;
