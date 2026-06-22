@@ -293,7 +293,7 @@ input:focus{border-color:#3a7bd5;}
 
 <div class="screen" id="s-game">
   <div class="topbar">
-    <span class="t-logo">🃏 МЕМЫ</span>
+    <span class="t-logo"><img src="https://i.ibb.co/zKkqdX9/image.jpg" style="width:28px;height:37px;object-fit:cover;border-radius:4px;border:1.5px solid #FFD600;vertical-align:middle;margin-right:5px;"> МЕМЫ</span>
     <div class="t-mid"><span class="t-round" id="g-round">Раунд 1</span><span class="t-limit" id="g-limit"></span></div>
     <div class="t-right">
       <button class="audio-btn" id="btn-music" onclick="toggleMusic()">🎵</button>
@@ -351,7 +351,9 @@ function openRules(){showScreen('s-rules');var bg=document.getElementById('rules
 const SFX={startup:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Startup.wav',shutdown:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Shutdown.wav',click:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Start.wav',error:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Ding.wav',plug:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Logon%20Sound.wav',unplug:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Logoff%20Sound.wav',folder:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Menu%20Command.wav'};
 var sfxOn=true,musicOn=true,audioUnlocked=false,bgMusic=null;
 function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;if(musicOn)startMusic();}
-document.addEventListener('click',unlockAudio,{once:true});
+function tryStartMusic(){if(musicOn&&audioUnlocked&&bgMusic&&bgMusic.paused){bgMusic.play().catch(function(){});}}
+document.addEventListener('click',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}});
+document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}},{passive:true});
 function startMusic(){if(!audioUnlocked||!musicOn)return;if(!bgMusic){bgMusic=new Audio('https://archive.org/download/trollsong_202202/Troll%20Song%20%5B360p%5D.mp4');bgMusic.loop=true;bgMusic.volume=0.07;}bgMusic.play().catch(function(){});}
 function snd(k,v){if(!sfxOn||!audioUnlocked)return;try{var a=new Audio(SFX[k]);if(a){a.volume=v||0.7;a.play().catch(function(){});}}catch(e){}}
 function toggleMusic(){musicOn=!musicOn;audioUnlocked=true;if(musicOn)startMusic();else if(bgMusic)bgMusic.pause();syncAudioUI();}
