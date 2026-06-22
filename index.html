@@ -354,7 +354,7 @@ function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;if(musicOn)sta
 function tryStartMusic(){if(musicOn&&audioUnlocked&&bgMusic&&bgMusic.paused){bgMusic.play().catch(function(){});}}
 document.addEventListener('click',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}});
 document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}},{passive:true});
-function startMusic(){if(!audioUnlocked||!musicOn)return;if(!bgMusic){bgMusic=new Audio('https://archive.org/download/trollsong_202202/Troll%20Song%20%5B360p%5D.mp4');bgMusic.loop=true;bgMusic.volume=0.07;}bgMusic.play().catch(function(){});}
+function startMusic(){if(!audioUnlocked||!musicOn)return;if(!bgMusic){bgMusic=new Audio('https://povidlo1212-wq.github.io/meme-game/trololololololo-lolololo.mp3');bgMusic.loop=true;bgMusic.volume=0.07;}bgMusic.play().catch(function(){});}
 function snd(k,v){if(!sfxOn||!audioUnlocked)return;try{var a=new Audio(SFX[k]);if(a){a.volume=v||0.7;a.play().catch(function(){});}}catch(e){}}
 function toggleMusic(){musicOn=!musicOn;audioUnlocked=true;if(musicOn)startMusic();else if(bgMusic)bgMusic.pause();syncAudioUI();}
 function toggleSfx(){sfxOn=!sfxOn;syncAudioUI();}
