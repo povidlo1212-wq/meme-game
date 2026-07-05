@@ -498,6 +498,7 @@ function setScore(v,btn){selectedScore=v;document.querySelectorAll('.score-btn')
 function sndClick(){snd('click',.6);}
 function sndError(){snd('error',.7);}
 function showWinnerStrip(txt){var ws=$('winner-strip'),mws=$('mob-winner-strip');if(ws){ws.textContent=txt;ws.classList.add('show');}if(mws){mws.textContent=txt;mws.classList.add('show');requestAnimationFrame(updateMobCardsInset);}}
+function updateMobCardsInset(){var cards=$('mob-cards');if(!cards)return;var mh=$('mob-hand');var ws=$('mob-winner-strip');var sit=$('mob-sit');var handH=mh?mh.offsetHeight:0;var winH=(ws&&ws.classList.contains('show'))?ws.offsetHeight+6:0;if(ws&&sit){var mw=$('mob-wrap');if(mw){var sitTop=sit.getBoundingClientRect().top-mw.getBoundingClientRect().top;ws.style.top=(sitTop-winH)+'px';}}cards.style.bottom=handH+'px';}
 function hideWinnerStrip(){var ws=$('winner-strip'),mws=$('mob-winner-strip');if(ws)ws.classList.remove('show');if(mws){mws.classList.remove('show');requestAnimationFrame(updateMobCardsInset);}}
 
 function saveSession(){try{var data={roomCode:roomCode,id:ME.id,nick:ME.nick,avUrl:ME.avUrl,isHost:isHost,isPublic:isPublicMatch};if(isHost&&HOST)data.hostState=JSON.stringify(HOST);localStorage.setItem('mm_session',JSON.stringify(data));}catch(e){}}
