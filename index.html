@@ -45,10 +45,10 @@ input:focus{border-color:#3a7bd5;}
 .btn-o{background:#f57c00;color:#fff;box-shadow:0 3px 0 #bf360c;}
 .btn-sm{padding:7px 13px;font-size:.8rem;}
 .btn-full{width:100%;margin-top:6px;}
-.audio-btn{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(0,0,0,.7);backdrop-filter:blur(6px);color:#fff;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.5);-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+.audio-btn{width:38px;height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);backdrop-filter:blur(6px);color:#fff;font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.4);touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .audio-btn:hover{background:rgba(0,0,0,.8);border-color:#FFD600;}
 .audio-btn.muted{opacity:.4;filter:grayscale(1);}
-.audio-overlay{position:fixed;top:60px;right:10px;z-index:99999;display:flex;gap:5px;}
+.audio-overlay{position:fixed;top:12px;right:2px;z-index:99999;display:flex;gap:8px;}
 #s-lobby{background:linear-gradient(160deg,#0d2254,#1a4a9e);justify-content:flex-start;padding:20px;overflow-y:auto;}
 .lob-wrap{max-width:440px;width:100%;}
 .lob-hdr{background:#FFD600;color:#222;border-radius:14px 14px 0 0;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
@@ -219,7 +219,11 @@ input:focus{border-color:#3a7bd5;}
 </head>
 <body>
 
-
+<div class="audio-overlay" id="audio-overlay">
+  <button class="audio-btn" id="btn-music2" onclick="toggleMusic()">🎵</button>
+  <button class="audio-btn" id="btn-sfx2" onclick="toggleSfx()">🔊</button>
+  <button class="audio-btn" id="btn-settings2" onclick="openSettings()">⚙️</button>
+</div>
 
   <div id="rejoin-banner" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
     <div style="background:#fff;border-radius:16px;padding:24px;margin:20px;text-align:center;max-width:320px;width:100%;">
@@ -231,16 +235,10 @@ input:focus{border-color:#3a7bd5;}
       </div>
     </div>
   </div>
-<div class="audio-overlay" id="audio-overlay">
-  <button class="audio-btn" id="btn-music2" onclick="toggleMusic()">🎵</button>
-  <button class="audio-btn" id="btn-sfx2" onclick="toggleSfx()">🔊</button>
-  <button class="audio-btn" id="btn-settings2" onclick="openSettings()">⚙️</button>
-</div>
 <div class="screen active" id="s-home">
   <div id="float-bg"></div>
   <div class="home-content">
     <div class="home-cover-box"><img src="https://i.ibb.co/zKkqdX9/image.jpg" alt="Мемы" loading="eager"></div>
-
     <div class="home-card">
       <label>Твой ник</label>
       <input type="text" id="h-nick" placeholder="Введи никнейм..." maxlength="16" onkeydown="if(event.key==='Enter'){this.blur();}" onkeyup="if(event.key==='Enter'){this.blur();}">
@@ -385,11 +383,13 @@ function openRules(){showScreen('s-rules');var bg=document.getElementById('rules
 
 const SFX={startup:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Startup.wav',shutdown:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Shutdown.wav',click:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Start.wav',error:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Ding.wav',plug:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Logon%20Sound.wav',unplug:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Logoff%20Sound.wav',folder:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Menu%20Command.wav'};
 var sfxOn=true,musicOn=true,audioUnlocked=false,bgMusic=null;
-function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;if(musicOn)startMusic();}
+function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;if(musicOn&&musicVolume>0)startMusic();}
+function toggleMusic(){audioUnlocked=true;musicOn=!musicOn;if(musicOn){if(musicVolume<=0){musicVolume=0.07;var s=document.getElementById('music-vol-slider');if(s)s.value=50;var l=document.getElementById('music-vol-lbl');if(l)l.textContent='50%';}if(bgMusic)bgMusic.volume=musicVolume;startMusic();}else{if(bgMusic)bgMusic.pause();}syncAudioUI();}
+function toggleSfx(){sfxOn=!sfxOn;if(sfxOn&&sfxVolume<=0){sfxVolume=0.7;var s=document.getElementById('sfx-vol-slider');if(s)s.value=70;var l=document.getElementById('sfx-vol-lbl');if(l)l.textContent='70%';}syncAudioUI();}
 function tryStartMusic(){if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused){bgMusic.play().catch(function(){});}}
 document.addEventListener('click',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}});
 document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}},{passive:true});
-function startMusic(){if(!audioUnlocked||!musicOn)return;if(!bgMusic){bgMusic=new Audio('https://povidlo1212-wq.github.io/meme-game/trololololololo-lolololo.mp3');bgMusic.loop=true;bgMusic.volume=0.07;}bgMusic.play().catch(function(){});}
+function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;if(!bgMusic){bgMusic=new Audio('https://povidlo1212-wq.github.io/meme-game/trololololololo-lolololo.mp3');bgMusic.loop=true;}bgMusic.volume=musicVolume;bgMusic.play().catch(function(){});}
 function snd(k,v){if(!sfxOn||!audioUnlocked)return;try{var a=new Audio(SFX[k]);if(a){a.volume=sfxVolume*(v||1);a.play().catch(function(){});}}catch(e){}}
 var musicVolume=0.07,sfxVolume=0.7;
 function loadStats(){try{var s=localStorage.getItem('mm_stats');return s?JSON.parse(s):{games:0,wins:0,sits:{}};}catch(e){return{games:0,wins:0,sits:{}};}}
@@ -397,7 +397,7 @@ function saveStats(st){try{localStorage.setItem('mm_stats',JSON.stringify(st));}
 function recordGame(won,sitText,memeUrl){var st=loadStats();st.games++;if(won)st.wins++;if(sitText){st.sits[sitText]=(st.sits[sitText]||0)+1;}if(memeUrl){if(!st.memes)st.memes={};st.memes[memeUrl]=(st.memes[memeUrl]||0)+1;}saveStats(st);}
 function openSettings(){var modal=document.getElementById('settings-modal');if(!modal)return;renderAvGrid();renderStats();var ms=document.getElementById('music-vol-slider');var ss=document.getElementById('sfx-vol-slider');if(ms){var mv=Math.round(musicVolume/0.07*50);ms.value=Math.min(100,mv);document.getElementById('music-vol-lbl').textContent=ms.value+'%';}if(ss){var sv=Math.round(sfxVolume*100);ss.value=sv;document.getElementById('sfx-vol-lbl').textContent=sv+'%';}modal.classList.add('open');}
 function closeSettings(){var modal=document.getElementById('settings-modal');if(modal)modal.classList.remove('open');}
-function onMusicVol(v){v=parseInt(v);musicVolume=v/100*0.14;document.getElementById('music-vol-lbl').textContent=v+'%';if(v===0){musicOn=false;if(bgMusic){bgMusic.pause();bgMusic.volume=0;}}else{if(bgMusic)bgMusic.volume=musicVolume;if(!musicOn){musicOn=true;audioUnlocked=true;startMusic();}}syncAudioUI();}
+function onMusicVol(v){v=parseInt(v);musicVolume=v/100*0.14;document.getElementById('music-vol-lbl').textContent=v+'%';if(v===0){musicOn=false;if(bgMusic)bgMusic.pause();}else{if(bgMusic)bgMusic.volume=musicVolume;if(!musicOn){musicOn=true;audioUnlocked=true;startMusic();}}syncAudioUI();}
 function onSfxVol(v){sfxVolume=v/100;document.getElementById('sfx-vol-lbl').textContent=v+'%';}
 function renderAvGrid(){var grid=document.getElementById('av-grid');if(!grid)return;grid.innerHTML='';AV_POOL.forEach(function(url,i){var d=document.createElement('div');d.className='av-opt'+(ME.avUrl===url?' selected':'');d.innerHTML='<img src="'+url+'" loading="lazy">';d.onclick=function(){ME.avUrl=url;try{localStorage.setItem('mm_av',url);}catch(e){}document.querySelectorAll('.av-opt').forEach(function(x){x.classList.remove('selected');});d.classList.add('selected');};grid.appendChild(d);});}
 function renderStats(){var el=document.getElementById('stats-content');if(!el)return;var st=loadStats();var favSit='—';var maxC=0;Object.keys(st.sits).forEach(function(s){if(st.sits[s]>maxC){maxC=st.sits[s];favSit=s;}});var wr=st.games>0?Math.round(st.wins/st.games*100):0;var favMeme='';var maxM=0;Object.keys(st.memes||{}).forEach(function(u){if((st.memes[u]||0)>maxM){maxM=st.memes[u];favMeme=u;}});var html='<div class="stat-row"><span>Игр сыграно</span><span>'+st.games+'</span></div>';html+='<div class="stat-row"><span>Побед</span><span>'+st.wins+'</span></div>';html+='<div class="stat-row"><span>Процент побед</span><span>'+wr+'%</span></div>';html+='<div class="stat-row"><span>Любимая ситуация</span><span style="font-size:.7rem;max-width:160px;text-align:right">'+favSit+'</span></div>';html+='<div class="stat-row" style="flex-direction:column;align-items:center;gap:6px;padding:8px 0"><span>Любимый мем</span>';html+=favMeme?'<img src="'+favMeme+'" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid #FFD600">':'<span style="color:#aac4ff;font-size:.8rem">Сыграй несколько партий!</span>';html+='</div>';el.innerHTML=html;}
