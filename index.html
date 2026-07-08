@@ -9,6 +9,7 @@
 <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@700;800;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -48,7 +49,8 @@ input:focus{border-color:#3a7bd5;}
 .audio-btn{width:38px;height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);backdrop-filter:blur(6px);color:#fff;font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.4);touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .audio-btn:hover{background:rgba(0,0,0,.8);border-color:#FFD600;}
 .audio-btn.muted{opacity:.4;filter:grayscale(1);}
-.audio-overlay{position:fixed;top:12px;right:2px;z-index:99999;display:flex;gap:8px;}
+.audio-overlay{position:fixed;top:12px;right:2px;z-index:99999;display:flex;flex-direction:column;gap:8px;}
+.audio-row{display:flex;gap:8px;justify-content:flex-end;}
 #s-lobby{background:linear-gradient(160deg,#0d2254,#1a4a9e);justify-content:flex-start;padding:20px;overflow-y:auto;}
 .lob-wrap{max-width:440px;width:100%;}
 .lob-hdr{background:#FFD600;color:#222;border-radius:14px 14px 0 0;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
@@ -223,9 +225,14 @@ input:focus{border-color:#3a7bd5;}
 <body>
 
 <div class="audio-overlay" id="audio-overlay">
-  <button class="audio-btn" id="btn-music2" onclick="toggleMusic()">🎵</button>
-  <button class="audio-btn" id="btn-sfx2" onclick="toggleSfx()">🔊</button>
-  <button class="audio-btn" id="btn-settings2" onclick="openSettings()">⚙️</button>
+  <div class="audio-row">
+    <button class="audio-btn" id="btn-settings2" onclick="openSettings()">⚙️</button>
+    <button class="audio-btn" id="btn-leaderboard2" onclick="openLeaderboard()">🏆</button>
+  </div>
+  <div class="audio-row">
+    <button class="audio-btn" id="btn-music2" onclick="toggleMusic()">🎵</button>
+    <button class="audio-btn" id="btn-sfx2" onclick="toggleSfx()">🔊</button>
+  </div>
 </div>
 
   <div id="rejoin-banner" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
@@ -401,9 +408,13 @@ function loadStats(){try{var s=localStorage.getItem('mm_stats');var st=s?JSON.pa
 function saveStats(st){try{localStorage.setItem('mm_stats',JSON.stringify(st));}catch(e){}}
 function stampIdentity(st){st.pid=ME.pid;if(ME.nick)st.nick=ME.nick;}
 function recordGame(won,sitText,memeUrl){var st=loadStats();st.games++;if(won)st.wins++;if(sitText){st.sits[sitText]=(st.sits[sitText]||0)+1;}if(memeUrl){if(!st.memes)st.memes={};st.memes[memeUrl]=(st.memes[memeUrl]||0)+1;}stampIdentity(st);saveStats(st);}
-function recordMatchEnd(won){var st=loadStats();st.matches++;if(won)st.matchWins++;stampIdentity(st);saveStats(st);}
+function recordMatchEnd(won){var st=loadStats();st.matches++;if(won)st.matchWins++;stampIdentity(st);saveStats(st);syncLeaderboard(st);}
 function openSettings(){var modal=document.getElementById('settings-modal');if(!modal)return;renderAvGrid();renderStats();var ms=document.getElementById('music-vol-slider');var ss=document.getElementById('sfx-vol-slider');if(ms){var mv=Math.round(musicVolume/0.07*50);ms.value=Math.min(100,mv);document.getElementById('music-vol-lbl').textContent=ms.value+'%';}if(ss){var sv=Math.round(sfxVolume*100);ss.value=sv;document.getElementById('sfx-vol-lbl').textContent=sv+'%';}syncHintsBtn();modal.classList.add('open');}
 function closeSettings(){var modal=document.getElementById('settings-modal');if(modal)modal.classList.remove('open');}
+function openLeaderboard(){var modal=document.getElementById('leaderboard-modal');if(!modal)return;modal.classList.add('open');renderLeaderboard();}
+function closeLeaderboard(){var modal=document.getElementById('leaderboard-modal');if(modal)modal.classList.remove('open');}
+function renderLeaderboard(){var el=document.getElementById('leaderboard-content');if(!el)return;el.innerHTML='<div style="text-align:center;color:#aac4ff;padding:20px 0">Загрузка...</div>';try{if(!fbDB&&!initFirebase()){el.innerHTML='<div style="text-align:center;color:#aac4ff;padding:20px 0">Рейтинг недоступен офлайн</div>';return;}fbDB.ref('players').orderByChild('matchWins').limitToLast(50).once('value').then(function(snap){var list=[];snap.forEach(function(ch){var v=ch.val()||{};v.pid=ch.key;list.push(v);});list.reverse();if(!list.length){el.innerHTML='<div style="text-align:center;color:#aac4ff;padding:20px 0">Пока никто не сыграл ни одной игры</div>';return;}var medals=['🥇','🥈','🥉'];el.innerHTML=list.map(function(p,i){var isMe=p.pid===ME.pid;return '<div class="stat-row" style="'+(isMe?'background:rgba(255,214,0,.12);border-radius:8px;padding-left:6px;padding-right:6px':'')+'"><span style="width:30px">'+(medals[i]||('#'+(i+1)))+'</span><span style="flex:1;text-align:left;color:'+(isMe?'#FFD600':'#fff')+';font-weight:'+(isMe?'800':'600')+'">'+(p.nick||'Игрок')+(isMe?' (я)':'')+'</span><span style="color:#FFD600;font-weight:700">'+(p.matchWins||0)+' 🏆</span></div>';}).join('');}).catch(function(){el.innerHTML='<div style="text-align:center;color:#ff6b6b;padding:20px 0">Не удалось загрузить рейтинг</div>';});}catch(e){el.innerHTML='<div style="text-align:center;color:#ff6b6b;padding:20px 0">Не удалось загрузить рейтинг</div>';}}
+function syncLeaderboard(st){try{if(!st||!st.nick||!st.pid)return;if(!fbDB&&!initFirebase())return;fbDB.ref('players/'+st.pid).set({nick:st.nick,matches:st.matches||0,matchWins:st.matchWins||0,games:st.games||0,wins:st.wins||0,updatedAt:Date.now()}).catch(function(){});}catch(e){}}
 function onMusicVol(v){v=parseInt(v);musicVolume=v/100*0.14;document.getElementById('music-vol-lbl').textContent=v+'%';if(v===0){musicOn=false;if(bgMusic)bgMusic.pause();}else{if(bgMusic)bgMusic.volume=musicVolume;if(!musicOn){musicOn=true;audioUnlocked=true;startMusic();}}syncAudioUI();}
 function onSfxVol(v){sfxVolume=v/100;document.getElementById('sfx-vol-lbl').textContent=v+'%';}
 function renderAvGrid(){var grid=document.getElementById('av-grid');if(!grid)return;grid.innerHTML='';AV_POOL.forEach(function(url,i){var d=document.createElement('div');d.className='av-opt'+(ME.avUrl===url?' selected':'');d.innerHTML='<img src="'+url+'" loading="lazy">';d.onclick=function(){ME.avUrl=url;try{localStorage.setItem('mm_av',url);}catch(e){}document.querySelectorAll('.av-opt').forEach(function(x){x.classList.remove('selected');});d.classList.add('selected');};grid.appendChild(d);});}
@@ -424,7 +435,7 @@ function showInterstitialAd(){if(!AdsController)return;try{AdsController.show().
 
 var firebaseConfig={apiKey:"AIzaSyDD4rGUeM0VRByb4nMWgJl426EQ85nOSO0",authDomain:"memes-millennials.firebaseapp.com",databaseURL:"https://memes-millennials-default-rtdb.europe-west1.firebasedatabase.app",projectId:"memes-millennials",storageBucket:"memes-millennials.firebasestorage.app",messagingSenderId:"445610408724",appId:"1:445610408724:web:b9ff7a66c7f2e45284a001"};
 var fbApp=null,fbDB=null;
-function initFirebase(){if(fbDB)return true;try{if(typeof firebase==='undefined')return false;fbApp=firebase.initializeApp(firebaseConfig);fbDB=firebase.database();return true;}catch(e){console.error('Firebase init failed',e);return false;}}
+function initFirebase(){if(fbDB)return true;try{if(typeof firebase==='undefined')return false;fbApp=firebase.initializeApp(firebaseConfig);fbDB=firebase.database();try{firebase.auth().signInAnonymously().catch(function(){});}catch(e2){}return true;}catch(e){console.error('Firebase init failed',e);return false;}}
 initFirebase();
 window.addEventListener('load',function(){setTimeout(function(){var sh=document.getElementById('s-home');if(sh&&sh.classList.contains('active'))showHint('home',HINTS.home);},1200);try{var sp='';if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param)sp=Telegram.WebApp.initDataUnsafe.start_param;if(!sp){var m=location.search.match(/[?&](?:startapp|code|tgWebAppStartParam)=([A-Za-z0-9]{4})/);if(m)sp=m[1];}if(!sp&&location.hash){var m2=location.hash.match(/tgWebAppStartParam=([A-Za-z0-9]{4})/);if(m2)sp=m2[1];}if(sp&&sp.length===4){var ci=document.getElementById('h-code');if(ci)ci.value=sp.toUpperCase();}}catch(e){}if(!fbDB)initFirebase();var s=loadSession();if(s&&s.roomCode){if(s.isPublic){checkRoomExists(s.roomCode,function(exists){if(exists)showRejoinBanner();else clearSession();});}else{showRejoinBanner();}}});
 
@@ -681,6 +692,14 @@ syncAudioUI();
     <button class="settings-btn" id="btn-reset-hints" style="background:#3a4a8a;color:#fff" onclick="toggleHints()">💡 Подсказки: ВЫКЛ</button>
     <button class="settings-btn settings-share" onclick="shareGame()">📤 Поделиться игрой</button>
     <button class="settings-btn settings-close" onclick="closeSettings()">✕ Закрыть</button>
+  </div>
+</div>
+
+<div class="settings-modal" id="leaderboard-modal">
+  <div class="settings-box">
+    <div class="settings-title">🏆 Таблица лидеров</div>
+    <div id="leaderboard-content"></div>
+    <button class="settings-btn settings-close" onclick="closeLeaderboard()">✕ Закрыть</button>
   </div>
 </div>
 </body>
