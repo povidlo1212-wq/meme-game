@@ -549,7 +549,7 @@ function getPid(){try{var p=localStorage.getItem('mm_pid');if(!p){p=genId()+genI
 var imgCache={};
 function preloadImg(url){if(imgCache[url])return;imgCache[url]=1;var i=new Image();i.src=url;}
 function mkImg(url,w,h){preloadImg(url);return '<img src="'+url+'" width="'+w+'" height="'+h+'" style="object-fit:cover;display:block;" loading="eager" onerror="this.style.opacity=\'.1\'">';}
-function mkCover(w,h){return mkImg(COVER_URL,w,h);}
+function activeCoverUrl(){return ACTIVE_CATEGORY==='zoomers'?ZOOMER_COVER:COVER_URL;}function mkCover(w,h){return mkImg(activeCoverUrl(),w,h);}
 function isMob(){return window.innerWidth<=600;}
 function getRows(n){if(n<=3)return[n];var top=Math.ceil(n/2);return[top,n-top];}
 function calcPlayedCardSize(o){var availW=o.availW,availH=o.availH,perRow=o.perRow,numRows=o.numRows,gap=o.gap||6,extraPerCard=o.extraPerCard||0,minW=o.minW||32,maxW=o.maxW||85;var aspect=1.33;var cardW=Math.min(maxW,Math.max(minW,Math.floor((availW-gap*(perRow-1)-16)/perRow)));var cardH=Math.round(cardW*aspect);if(availH>0&&numRows>0){var total=numRows*(cardH+extraPerCard)+(numRows-1)*gap;if(total>availH){var maxH=Math.floor((availH-(numRows-1)*gap)/numRows)-extraPerCard;cardW=Math.min(cardW,Math.max(minW,Math.floor(Math.max(28,maxH)/aspect)));cardH=Math.round(cardW*aspect);}}return{cardW:cardW,cardH:cardH};}
