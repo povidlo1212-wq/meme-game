@@ -148,7 +148,7 @@ input:focus{border-color:#3a7bd5;}
 .hand-scroll.has-more,#mob-hand-grid.has-more{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent 100%);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent 100%);}
 .hand-scrollwrap{position:relative;}
 .hand-arrow{position:absolute;top:50%;right:2px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#FFD600;color:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;line-height:1;box-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;z-index:6;opacity:0;transition:opacity .25s;animation:handArrowBounce 1.2s ease-in-out infinite;}
-.hand-arrow.show{opacity:1;}
+.hand-arrow.show{opacity:1;pointer-events:auto;cursor:pointer;}
 @keyframes handArrowBounce{0%,100%{transform:translateY(-50%) translateX(0);}50%{transform:translateY(-50%) translateX(6px);}}
 .hand-scroll::-webkit-scrollbar{height:3px;}
 .hand-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:2px;}
@@ -425,7 +425,7 @@ input:focus{border-color:#3a7bd5;}
     <div class="hand-info"><div class="hand-av" id="my-av"></div><span class="hand-nick" id="my-nick"></span><span class="hand-pts" id="my-pts">0 ★</span></div>
     <div class="hand-scrollwrap">
       <div class="hand-scroll" id="hand-scroll"></div>
-      <div class="hand-arrow" id="hand-arrow">›</div>
+      <div class="hand-arrow" id="hand-arrow" onclick="sndClick();scrollHandForward('hand-scroll')">›</div>
     </div>
     <div class="action-bar"><span class="st-msg" id="g-status"></span><button class="btn btn-y btn-sm" id="btn-play" onclick="sndClick();playCard()" style="display:none;min-width:100px;min-height:44px">✔ Сыграть</button></div>
   </div>
@@ -442,7 +442,7 @@ input:focus{border-color:#3a7bd5;}
       </div>
       <div class="hand-scrollwrap">
         <div id="mob-hand-grid"></div>
-        <div class="hand-arrow" id="mob-hand-arrow">›</div>
+        <div class="hand-arrow" id="mob-hand-arrow" onclick="sndClick();scrollHandForward('mob-hand-grid')">›</div>
       </div>
       <div id="mob-action">
         <button class="btn btn-y btn-sm" id="mob-btn-play" onclick="sndClick();playCard()" style="display:none;min-width:80px;min-height:36px">✔ Сыграть</button>
@@ -606,7 +606,7 @@ function sndError(){snd('error',.7);}
 function comingSoon(){sndError();alert('Скоро! Эта рубрика ещё в разработке 🙂');}
 function fitCoverBox(img){if(!img)return;function ap(){if(img.naturalWidth&&img.naturalHeight&&img.parentElement)img.parentElement.style.aspectRatio=img.naturalWidth+'/'+img.naturalHeight;}if(img.complete&&img.naturalWidth)ap();else img.addEventListener('load',ap,{once:true});}function enterHome(cat){ACTIVE_CATEGORY=cat;var img=document.getElementById('home-cover-img');if(img){img.src=(cat==='zoomers')?ZOOMER_COVER:'https://i.ibb.co/zKkqdX9/image.jpg';}showScreen('s-home');}document.querySelectorAll('.cat-thumb img[alt="Мемы миллениалов"],.cat-thumb img[alt="Мемы зумеров"]').forEach(fitCoverBox);
 function showWinnerStrip(txt){var ws=$('winner-strip'),mws=$('mob-winner-strip');if(ws){ws.textContent=txt;ws.classList.add('show');}if(mws){mws.textContent=txt;mws.classList.add('show');requestAnimationFrame(updateMobCardsInset);}}
-function updateMobCardsInset(){var cards=$('mob-cards');if(!cards)return;var mh=$('mob-hand');var ws=$('mob-winner-strip');var sit=$('mob-sit');var handH=mh?mh.offsetHeight:0;var winH=(ws&&ws.classList.contains('show'))?ws.offsetHeight+6:0;if(ws&&sit){var mw=$('mob-wrap');if(mw){var sitTop=sit.getBoundingClientRect().top-mw.getBoundingClientRect().top;ws.style.top=(sitTop-winH)+'px';}}cards.style.bottom=handH+'px';}
+function updateMobCardsInset(){var cards=$('mob-cards');if(!cards)return;var mh=$('mob-hand');var ws=$('mob-winner-strip');var sit=$('mob-sit');var handH=mh?mh.offsetHeight:0;var mbp=$('mob-btn-play');if(mbp&&mbp.style.display==='none'&&G&&G.phase==='submitting'){var me=G.players.find(function(p){return p.id===ME.id;});var judge=G.players[G.judgeIdx];var amJ=me&&judge&&me.id===judge.id;var used=me&&(G.submittedBy||[]).includes(ME.id);if(me&&!amJ&&!used)handH+=42;}var winH=(ws&&ws.classList.contains('show'))?ws.offsetHeight+6:0;if(ws&&sit){var mw=$('mob-wrap');if(mw){var sitTop=sit.getBoundingClientRect().top-mw.getBoundingClientRect().top;ws.style.top=(sitTop-winH)+'px';}}cards.style.bottom=handH+'px';}
 function hideWinnerStrip(){var ws=$('winner-strip'),mws=$('mob-winner-strip');if(ws)ws.classList.remove('show');if(mws){mws.classList.remove('show');requestAnimationFrame(updateMobCardsInset);}}
 
 function saveSession(){try{var data={roomCode:roomCode,id:ME.id,nick:ME.nick,avUrl:ME.avUrl,isHost:isHost,isPublic:isPublicMatch};if(isHost&&HOST)data.hostState=JSON.stringify(HOST);localStorage.setItem('mm_session',JSON.stringify(data));}catch(e){}}
@@ -693,6 +693,7 @@ if(type==='award'&&HOST.phase==='judging'&&j.id===playerId&&!HOST.paused)awardPo
 function nextSit(){if(paused)return;sndClick();sendAction({type:'next_sit',playerId:ME.id});}
 function confirmSit(){if(paused)return;sndClick();sendAction({type:'confirm_sit',playerId:ME.id});}
 function awardCard(wid){if(!G||G.phase!=='judging'||paused)return;sndClick();sendAction({type:'award',playerId:ME.id,winnerId:wid});}
+function scrollHandForward(id){var el=$(id);if(!el)return;var amount=Math.round(el.clientWidth*0.72);if(el.scrollLeft+el.clientWidth>=el.scrollWidth-4)el.scrollTo({left:0,behavior:'smooth'});else el.scrollBy({left:amount,behavior:'smooth'});}
 function updateScrollFade(el,arrowEl){if(!el)return;var hasMore=el.scrollWidth-el.clientWidth-el.scrollLeft>4;el.classList.toggle('has-more',hasMore);if(arrowEl)arrowEl.classList.toggle('show',hasMore);}
 function selectCard(id,el){if(paused)return;sndClick();selCard=id;selEl=el;document.querySelectorAll('.hcard,.mob-hcard').forEach(function(c){c.classList.remove('sel');});el.classList.add('sel');var bp=$('btn-play');if(bp)bp.style.display='inline-block';var mbp=$('mob-btn-play');if(mbp)mbp.style.display='inline-block';$('g-status').textContent='👆 Нажми «Сыграть»';var ms=$('mob-status');if(ms)ms.textContent='👆 Нажми «Сыграть»';try{sendAction({type:'select_card',playerId:ME.id,memeId:id});}catch(e){}}
 function playCard(){if(!selCard||!G||paused)return;var me=G.players.find(function(p){return p.id===ME.id;});var meme=me&&me.hand&&me.hand.find(function(m){return m.id===selCard;});if(!meme)return;var c=selCard;selCard=null;var bp=$('btn-play');if(bp)bp.style.display='none';var mbp=$('mob-btn-play');if(mbp)mbp.style.display='none';if(selEl){flyCard(meme.url,selEl.querySelector('.cf'),function(){sendAction({type:'play_card',playerId:ME.id,memeId:c});});}else sendAction({type:'play_card',playerId:ME.id,memeId:c});}
