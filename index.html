@@ -554,7 +554,8 @@ function genId(){return Math.random().toString(36).substr(2,8);}
 function getPid(){try{var p=localStorage.getItem('mm_pid');if(!p){p=genId()+genId();localStorage.setItem('mm_pid',p);}return p;}catch(e){return genId();}}
 var imgCache={};
 function preloadImg(url){if(imgCache[url])return;imgCache[url]=1;var i=new Image();i.src=url;}
-function mkImg(url,w,h){preloadImg(url);return '<img src="'+url+'" width="'+w+'" height="'+h+'" style="object-fit:cover;display:block;" loading="eager" onerror="this.style.opacity=\'.1\'">';}
+function imgRetry(el){var n=(parseInt(el.getAttribute('data-r')||'0',10))+1;if(n>4){el.style.opacity='.1';return;}el.setAttribute('data-r',n);var u=el.getAttribute('data-u');setTimeout(function(){el.src=u+(u.indexOf('?')>=0?'&':'?')+'_r='+n;},350*n);}
+function mkImg(url,w,h){preloadImg(url);return '<img src="'+url+'" data-u="'+url+'" width="'+w+'" height="'+h+'" style="object-fit:cover;display:block;" loading="eager" onerror="imgRetry(this)">';}
 function activeCoverUrl(){return ACTIVE_CATEGORY==='zoomers'?ZOOMER_COVER:COVER_URL;}function mkCover(w,h){return mkImg(activeCoverUrl(),w,h);}
 function isMob(){return window.innerWidth<=600;}
 function getRows(n){if(n<=3)return[n];var top=Math.ceil(n/2);return[top,n-top];}
