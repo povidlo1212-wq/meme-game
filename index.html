@@ -66,6 +66,8 @@ input:focus{border-color:#3a7bd5;}
 .audio-btn:hover{background:rgba(0,0,0,.8);border-color:#FFD600;}
 .audio-btn.muted{opacity:.4;filter:grayscale(1);}
 .audio-overlay{position:fixed;top:calc(12px + var(--safe-top));right:2px;z-index:99999;display:flex;flex-direction:column;gap:8px;}
+.home-back-btn{position:absolute;top:calc(12px + var(--safe-top));left:10px;z-index:5;}
+@media(pointer:fine){.home-back-btn{top:56px;}}
 .audio-row{display:flex;gap:8px;justify-content:flex-end;}
 #s-lobby{background:linear-gradient(160deg,#0d2254,#1a4a9e);justify-content:flex-start;padding:calc(20px + var(--safe-top)) 20px 20px;overflow-y:auto;}
 .lob-wrap{max-width:440px;width:100%;}
@@ -88,6 +90,7 @@ input:focus{border-color:#3a7bd5;}
 @media (max-width:600px){#s-game.cat-zoomers{background-image:url('https://i.ibb.co/qFJ2RsMw/image.jpg');}}
 #s-game::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,.18);pointer-events:none;z-index:0;}
 .topbar{position:relative;z-index:20;width:100%;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);padding:calc(6px + var(--safe-top)) 14px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #FFD600;flex-shrink:0;}
+@media(pointer:fine){.topbar{justify-content:center;gap:28px;}}
 .t-logo{font-family:'Russo One',sans-serif;font-size:.9rem;color:#FFD600;}
 .t-mid{display:flex;flex-direction:column;align-items:center;}
 .t-round{font-family:'Russo One',sans-serif;font-size:.88rem;color:#fff;}
@@ -307,7 +310,7 @@ input:focus{border-color:#3a7bd5;}
 
 <div class="screen" id="s-home">
   <div id="float-bg"></div>
-  <button class="audio-btn" style="position:absolute;top:calc(12px + var(--safe-top));left:10px;z-index:5" onclick="sndClick();showScreen('s-categories')">◀</button>
+  <button class="audio-btn home-back-btn" onclick="sndClick();showScreen('s-categories')">◀</button>
   <div class="home-content">
     <div class="home-cover-box"><img id="home-cover-img" src="https://i.ibb.co/zKkqdX9/image.jpg" alt="Мемы" loading="eager"></div>
     <div class="home-card">
@@ -754,7 +757,7 @@ function renderWinner(){if(!G)return;var s=G.players.slice().sort(function(a,b){
 window.addEventListener('resize',function(){_lastCenterKey='';if($('s-game')&&$('s-game').classList.contains('active'))renderAll();});
 syncAudioUI();
 initTimerSettings();
-(function(){var hs=$('hand-scroll'),mg=$('mob-hand-grid'),ha=$('hand-arrow'),ma=$('mob-hand-arrow');if(hs)hs.addEventListener('scroll',function(){updateScrollFade(hs,ha);});if(mg)mg.addEventListener('scroll',function(){updateScrollFade(mg,ma);});})();
+(function(){var hs=$('hand-scroll'),mg=$('mob-hand-grid'),ha=$('hand-arrow'),ma=$('mob-hand-arrow');if(hs)hs.addEventListener('scroll',function(){updateScrollFade(hs,ha);});if(mg)mg.addEventListener('scroll',function(){updateScrollFade(mg,ma);});if(hs){var _hsDown=false,_hsStartX=0,_hsScrollStart=0,_hsMoved=false;hs.addEventListener('mousedown',function(e){_hsDown=true;_hsMoved=false;_hsStartX=e.pageX;_hsScrollStart=hs.scrollLeft;hs.style.cursor='grabbing';});window.addEventListener('mouseup',function(){if(_hsDown){_hsDown=false;hs.style.cursor='';}});window.addEventListener('mousemove',function(e){if(!_hsDown)return;var dx=e.pageX-_hsStartX;if(Math.abs(dx)>5)_hsMoved=true;hs.scrollLeft=_hsScrollStart-dx;});hs.addEventListener('click',function(e){if(_hsMoved){e.stopPropagation();e.preventDefault();_hsMoved=false;}},true);}})();
 </script>
 
 <div class="settings-modal" id="settings-modal">
