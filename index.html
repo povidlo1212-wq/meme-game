@@ -13,6 +13,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@700;800;900&display=swap');
+:root{--safe-top:0px;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Nunito',sans-serif;min-height:100vh;overflow:hidden;background:#1a3a7a;}
 @media (pointer:fine){
@@ -64,9 +65,9 @@ input:focus{border-color:#3a7bd5;}
 .audio-btn{width:38px;height:38px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(0,0,0,.55);backdrop-filter:blur(6px);color:#fff;font-size:.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;box-shadow:0 2px 8px rgba(0,0,0,.4);touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .audio-btn:hover{background:rgba(0,0,0,.8);border-color:#FFD600;}
 .audio-btn.muted{opacity:.4;filter:grayscale(1);}
-.audio-overlay{position:fixed;top:12px;right:2px;z-index:99999;display:flex;flex-direction:column;gap:8px;}
+.audio-overlay{position:fixed;top:calc(12px + var(--safe-top));right:2px;z-index:99999;display:flex;flex-direction:column;gap:8px;}
 .audio-row{display:flex;gap:8px;justify-content:flex-end;}
-#s-lobby{background:linear-gradient(160deg,#0d2254,#1a4a9e);justify-content:flex-start;padding:20px;overflow-y:auto;}
+#s-lobby{background:linear-gradient(160deg,#0d2254,#1a4a9e);justify-content:flex-start;padding:calc(20px + var(--safe-top)) 20px 20px;overflow-y:auto;}
 .lob-wrap{max-width:440px;width:100%;}
 .lob-hdr{background:#FFD600;color:#222;border-radius:14px 14px 0 0;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
 .lob-hdr-left{display:flex;flex-direction:column;gap:2px;}
@@ -86,7 +87,7 @@ input:focus{border-color:#3a7bd5;}
 #s-game.cat-zoomers{background-image:url('https://i.ibb.co/23CwdnFQ/image.jpg');}
 @media (max-width:600px){#s-game.cat-zoomers{background-image:url('https://i.ibb.co/qFJ2RsMw/image.jpg');}}
 #s-game::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,.18);pointer-events:none;z-index:0;}
-.topbar{position:relative;z-index:20;width:100%;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);padding:6px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #FFD600;flex-shrink:0;}
+.topbar{position:relative;z-index:20;width:100%;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);padding:calc(6px + var(--safe-top)) 14px 6px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #FFD600;flex-shrink:0;}
 .t-logo{font-family:'Russo One',sans-serif;font-size:.9rem;color:#FFD600;}
 .t-mid{display:flex;flex-direction:column;align-items:center;}
 .t-round{font-family:'Russo One',sans-serif;font-size:.88rem;color:#fff;}
@@ -455,7 +456,7 @@ input:focus{border-color:#3a7bd5;}
 </div>
 
 <script>
-(function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();}catch(e){}})();
+(function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();function applySafeArea(){try{var s=tg.safeAreaInset||{},c=tg.contentSafeAreaInset||{},top=(s.top||0)+(c.top||0);document.documentElement.style.setProperty('--safe-top',top+'px');}catch(e){}}applySafeArea();if(typeof tg.onEvent==='function'){tg.onEvent('safeAreaChanged',applySafeArea);tg.onEvent('contentSafeAreaChanged',applySafeArea);tg.onEvent('fullscreenChanged',applySafeArea);}}catch(e){}})();
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
 function openRules(){showScreen('s-rules');var bg=document.getElementById('rules-float-bg');if(bg&&!bg.children.length){['🐸','🐕','😏','🌈','🐧','🔥','😤','🦖','🧙','😎','🐌','💍','🖖','🥣','✊','🎃','😱','🤦','😲','🎭'].forEach(function(e,i){var d=document.createElement('div');d.className='float-meme';d.textContent=e;d.style.left=(3+i*5)+'%';d.style.top=(8+Math.random()*78)+'%';d.style.animationDelay=(i*.45)+'s';d.style.animationDuration=(6+Math.random()*6)+'s';bg.appendChild(d);});}}
 
