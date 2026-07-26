@@ -30,7 +30,7 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;overflow:hidden;background
 .home-cover-box img{width:100%;height:100%;object-fit:cover;display:block;}
 #s-categories{position:relative;overflow-y:auto;overflow-x:hidden;background:linear-gradient(180deg,oklch(0.6 0.14 240) 0%,oklch(0.58 0.13 255) 32%,oklch(0.58 0.14 320) 62%,oklch(0.58 0.16 20) 100%);align-items:stretch!important;justify-content:flex-start!important;}
 .cat-bubble{position:absolute;border-radius:50%;background:#fff;pointer-events:none;z-index:0;}
-.cat-wrap{position:relative;z-index:1;width:100%;max-width:420px;margin:0 auto;padding:18px 18px 40px;box-sizing:border-box;}
+.cat-wrap{position:relative;z-index:1;width:100%;max-width:420px;margin:0 auto;padding:calc(18px + var(--safe-top)) 18px 40px;box-sizing:border-box;}
 .cat-header{text-align:center;padding:8px 6px 18px;}
 .cat-header .t1{font-family:'Russo One',sans-serif;font-size:2.3rem;color:#FFD600;-webkit-text-stroke:2px #000;letter-spacing:1px;line-height:1;}
 .cat-sub{margin-top:10px;color:#fff;font-size:.82rem;font-weight:800;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,.3);}
@@ -307,7 +307,7 @@ input:focus{border-color:#3a7bd5;}
 
 <div class="screen" id="s-home">
   <div id="float-bg"></div>
-  <button class="audio-btn" style="position:absolute;top:12px;left:10px;z-index:5" onclick="sndClick();showScreen('s-categories')">◀</button>
+  <button class="audio-btn" style="position:absolute;top:calc(12px + var(--safe-top));left:10px;z-index:5" onclick="sndClick();showScreen('s-categories')">◀</button>
   <div class="home-content">
     <div class="home-cover-box"><img id="home-cover-img" src="https://i.ibb.co/zKkqdX9/image.jpg" alt="Мемы" loading="eager"></div>
     <div class="home-card">
@@ -456,7 +456,7 @@ input:focus{border-color:#3a7bd5;}
 </div>
 
 <script>
-(function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();function applySafeArea(){try{var s=tg.safeAreaInset||{},c=tg.contentSafeAreaInset||{},top=(s.top||0)+(c.top||0);document.documentElement.style.setProperty('--safe-top',top+'px');}catch(e){}}applySafeArea();if(typeof tg.onEvent==='function'){tg.onEvent('safeAreaChanged',applySafeArea);tg.onEvent('contentSafeAreaChanged',applySafeArea);tg.onEvent('fullscreenChanged',applySafeArea);}}catch(e){}})();
+(function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();function applySafeArea(){try{if(!tg.isFullscreen){document.documentElement.style.setProperty('--safe-top','0px');return;}var s=tg.safeAreaInset||{},c=tg.contentSafeAreaInset||{},top=Math.min((s.top||0)+(c.top||0),90);document.documentElement.style.setProperty('--safe-top',top+'px');}catch(e){}}applySafeArea();if(typeof tg.onEvent==='function'){tg.onEvent('safeAreaChanged',applySafeArea);tg.onEvent('contentSafeAreaChanged',applySafeArea);tg.onEvent('fullscreenChanged',applySafeArea);}}catch(e){}})();
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
 function openRules(){showScreen('s-rules');var bg=document.getElementById('rules-float-bg');if(bg&&!bg.children.length){['🐸','🐕','😏','🌈','🐧','🔥','😤','🦖','🧙','😎','🐌','💍','🖖','🥣','✊','🎃','😱','🤦','😲','🎭'].forEach(function(e,i){var d=document.createElement('div');d.className='float-meme';d.textContent=e;d.style.left=(3+i*5)+'%';d.style.top=(8+Math.random()*78)+'%';d.style.animationDelay=(i*.45)+'s';d.style.animationDuration=(6+Math.random()*6)+'s';bg.appendChild(d);});}}
 
