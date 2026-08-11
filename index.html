@@ -306,7 +306,7 @@ input:focus{border-color:#3a7bd5;}
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="https://i.ibb.co/62r0PF3/image.jpg" alt="Мемы из фильмов и сериалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Мемы из фильмов и сериалов</div>
-          <button class="cat-play" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button>
+          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button>
         </div>
       </div>
     </div>
@@ -465,6 +465,41 @@ input:focus{border-color:#3a7bd5;}
 
 <script>
 (function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();var isMobilePlatform=tg.platform==='ios'||tg.platform==='android';if(!isMobilePlatform)return;tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();function applySafeArea(){try{if(!tg.isFullscreen){document.documentElement.style.setProperty('--safe-top','0px');return;}var s=tg.safeAreaInset||{},c=tg.contentSafeAreaInset||{},top=Math.min((s.top||0)+(c.top||0),90);document.documentElement.style.setProperty('--safe-top',top+'px');}catch(e){}}applySafeArea();if(typeof tg.onEvent==='function'){tg.onEvent('safeAreaChanged',applySafeArea);tg.onEvent('contentSafeAreaChanged',applySafeArea);tg.onEvent('fullscreenChanged',applySafeArea);}}catch(e){}})();
+var KINO_BACKEND_URL='https://meme-game-bot.onrender.com';
+var __kinoPaid=false;
+function tgInitData(){try{return (window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||'';}catch(e){return '';}}
+function updateKinoButton(){
+  var btn=document.getElementById('kino-play-btn');
+  if(!btn)return;
+  if(__kinoPaid){btn.textContent='ИГРАТЬ';btn.onclick=function(){sndClick();enterHome('kino');};}
+  else{btn.textContent='Купить доступ ⭐'+'100';btn.onclick=function(){sndClick();buyKinoAccess();};}
+}
+function checkKinoAccess(){
+  var initData=tgInitData();
+  if(!initData){updateKinoButton();return;}
+  fetch(KINO_BACKEND_URL+'/api/check-access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
+    .then(function(r){return r.json();})
+    .then(function(d){__kinoPaid=!!d.paid;updateKinoButton();})
+    .catch(function(){updateKinoButton();});
+}
+function buyKinoAccess(){
+  var initData=tgInitData();
+  if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
+  fetch(KINO_BACKEND_URL+'/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.alreadyPaid){__kinoPaid=true;updateKinoButton();return;}
+      if(!d.link){alert('Не удалось создать счёт, попробуй позже.');return;}
+      if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openInvoice){
+        Telegram.WebApp.openInvoice(d.link,function(status){
+          if(status==='paid'){__kinoPaid=true;updateKinoButton();}
+        });
+      }
+    })
+    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+}
+updateKinoButton();
+checkKinoAccess();
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
 function openRules(){showScreen('s-rules');var bg=document.getElementById('rules-float-bg');if(bg&&!bg.children.length){['🐸','🐕','😏','🌈','🐧','🔥','😤','🦖','🧙','😎','🐌','💍','🖖','🥣','✊','🎃','😱','🤦','😲','🎭'].forEach(function(e,i){var d=document.createElement('div');d.className='float-meme';d.textContent=e;d.style.left=(3+i*5)+'%';d.style.top=(8+Math.random()*78)+'%';d.style.animationDelay=(i*.45)+'s';d.style.animationDuration=(6+Math.random()*6)+'s';bg.appendChild(d);});}}
 
