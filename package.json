@@ -1,0 +1,17 @@
+{
+  "name": "meme-game-bot-server",
+  "version": "1.0.0",
+  "description": "Telegram bot backend: Stars payments for full game access",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "firebase-admin": "^12.3.1"
+  }
+}
