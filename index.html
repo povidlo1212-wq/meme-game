@@ -576,7 +576,7 @@ function toggleSfx(){sfxOn=!sfxOn;if(sfxOn&&sfxVolume<=0){sfxVolume=0.7;var s=do
 function tryStartMusic(){if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused){bgMusic.play().catch(function(){});}}
 document.addEventListener('click',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}});
 document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}},{passive:true});
-function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;var _url=CATEGORY_MUSIC[currentMusicKey]||CATEGORY_MUSIC.home;if(!bgMusic||bgMusic._musicKey!==currentMusicKey){if(bgMusic)bgMusic.pause();bgMusic=new Audio(_url);bgMusic.loop=true;bgMusic._musicKey=currentMusicKey;}bgMusic.volume=musicVolume;bgMusic.play().catch(function(){});}function switchMusic(key){if(currentMusicKey===key)return;currentMusicKey=key;if(audioUnlocked&&musicOn)startMusic();}
+function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;var _url=CATEGORY_MUSIC[currentMusicKey]||CATEGORY_MUSIC.home;if(!bgMusic||bgMusic._musicKey!==currentMusicKey){if(bgMusic)bgMusic.pause();bgMusic=new Audio(_url);bgMusic.loop=true;bgMusic._musicKey=currentMusicKey;try{bgMusic.fetchPriority='low';}catch(e){}}bgMusic.volume=musicVolume;bgMusic.play().catch(function(){});}function switchMusic(key){if(currentMusicKey===key)return;currentMusicKey=key;if(audioUnlocked&&musicOn)startMusic();}
 var _sfxCache={},_sfxLoading={},_sfxBuffers={},_audioCtx=null;
 function getAudioCtx(){if(!_audioCtx){try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return _audioCtx;}
 function getSfxAudio(url){var a=_sfxCache[url];if(!a){a=new Audio(url);a.preload='auto';_sfxCache[url]=a;}return a;}
