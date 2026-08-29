@@ -2,6 +2,12 @@ const crypto = require('crypto');
 const express = require('express');
 const admin = require('firebase-admin');
 
+// Safety net: one bad outbound request (e.g. to a payment provider) must never
+// take down the whole bot server. Log it instead of crashing the process.
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection (server kept running):', err);
+});
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -181,14 +187,20 @@ app.post('/api/create-tbank-payment', async (req, res) => {
   if (alreadyPaid) return res.json({ alreadyPaid: true });
 
   const orderId = `kino-${user.id}-${Date.now()}`;
-  const result = await tbankCall('Init', {
-    Amount: TBANK_PRICE_RUB * 100, // kopecks
-    OrderId: orderId,
-    Description: 'Полный доступ к игре: рубрика «Кино и сериалы»',
-    NotificationURL: `${PUBLIC_URL}/tbank-notification`,
-    SuccessURL: `${PUBLIC_URL}/tbank-success`,
-    FailURL: `${PUBLIC_URL}/tbank-fail`,
-  });
+  let result;
+  try {
+    result = await tbankCall('Init', {
+      Amount: TBANK_PRICE_RUB * 100, // kopecks
+      OrderId: orderId,
+      Description: 'Полный доступ к игре: рубрика «Кино и сериалы»',
+      NotificationURL: `${PUBLIC_URL}/tbank-notification`,
+      SuccessURL: `${PUBLIC_URL}/tbank-success`,
+      FailURL: `${PUBLIC_URL}/tbank-fail`,
+    });
+  } catch (e) {
+    console.error('T-Bank Init request failed:', e);
+    return res.status(502).json({ error: 'tbank api unreachable' });
+  }
 
   if (!result.Success) {
     console.error('T-Bank Init failed:', JSON.stringify(result));
@@ -250,18 +262,4 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
       const msg = update.message;
       const sp = msg.successful_payment;
       const telegramId = msg.from.id;
-      await markPaid(telegramId, sp.telegram_payment_charge_id);
-      await tgCall('sendMessage', {
-        chat_id: msg.chat.id,
-        text: 'Спасибо за покупку! Полный доступ открыт 🎬 Возвращайся в игру — рубрика «Кино и сериалы» уже разблокирована.',
-      });
-      return;
-    }
-  } catch (e) {
-    console.error('webhook processing error:', e);
-  }
-});
-
-app.get('/', (req, res) => res.send('meme-game-bot-server is running'));
-
-app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+      await markPaid(telegramId, sp.telegram_payment_charg
