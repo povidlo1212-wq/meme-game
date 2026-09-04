@@ -167,7 +167,7 @@ app.post('/api/create-invoice', async (req, res) => {
 
   const result = await tgCall('createInvoiceLink', {
     title: 'Полный доступ к игре',
-    description: 'Открывает рубрику «Кино и сериалы» и все будущие платные рубрики навсегда.',
+    description: 'Открывает доступ ко всем платным рубрикам игры — сейчас и в будущем, навсегда.',
     payload: `full_access_${user.id}_${Date.now()}`,
     currency: 'XTR',
     prices: [{ label: 'Полный доступ', amount: STARS_PRICE }],
@@ -192,7 +192,7 @@ app.post('/api/create-tbank-payment', async (req, res) => {
     result = await tbankCall('Init', {
       Amount: TBANK_PRICE_RUB * 100, // kopecks
       OrderId: orderId,
-      Description: 'Полный доступ к игре: рубрика «Кино и сериалы»',
+      Description: 'Полный доступ к игре: все платные рубрики',
       NotificationURL: `${PUBLIC_URL}/tbank-notification`,
       SuccessURL: `${PUBLIC_URL}/tbank-success`,
       FailURL: `${PUBLIC_URL}/tbank-fail`,
@@ -232,7 +232,7 @@ app.post('/tbank-notification', async (req, res) => {
         try {
           await tgCall('sendMessage', {
             chat_id: telegramId,
-            text: 'Спасибо за покупку! Полный доступ открыт 🎬 Возвращайся в игру — рубрика «Кино и сериалы» уже разблокирована.',
+            text: 'Спасибо за покупку! Полный доступ открыт 🎉 Возвращайся в игру — все платные рубрики уже разблокированы.',
           });
         } catch (e) { /* best effort */ }
       }
@@ -265,7 +265,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
       await markPaid(telegramId, sp.telegram_payment_charge_id);
       await tgCall('sendMessage', {
         chat_id: msg.chat.id,
-        text: 'Спасибо за покупку! Полный доступ открыт 🎬 Возвращайся в игру — рубрика «Кино и сериалы» уже разблокирована.',
+        text: 'Спасибо за покупку! Полный доступ открыт 🎉 Возвращайся в игру — все платные рубрики уже разблокированы.',
       });
       return;
     }
