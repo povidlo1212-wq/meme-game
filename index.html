@@ -597,6 +597,7 @@ function recordGame(won,sitText,memeUrl){var st=loadStats();st.games++;if(won)st
 function recordMatchEnd(won){var st=loadStats();st.matches++;if(won)st.matchWins++;stampIdentity(st);saveStats(st);syncLeaderboard(st);}
 function openSettings(){var modal=document.getElementById('settings-modal');if(!modal)return;renderAvGrid();renderStats();renderRoomHistory();initTimerSettings();var ms=document.getElementById('music-vol-slider');var ss=document.getElementById('sfx-vol-slider');if(ms){var mv=Math.round(musicVolume/0.07*50);ms.value=Math.min(100,mv);document.getElementById('music-vol-lbl').textContent=ms.value+'%';}if(ss){var sv=Math.round(sfxVolume*100);ss.value=sv;document.getElementById('sfx-vol-lbl').textContent=sv+'%';}syncHintsBtn();modal.classList.add('open');}
 function closeSettings(){var modal=document.getElementById('settings-modal');if(modal)modal.classList.remove('open');}
+function openSupport(){var u='https://t.me/meme_millennials_bot';try{if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openTelegramLink){Telegram.WebApp.openTelegramLink(u);return;}}catch(e){}try{window.open(u,'_blank');}catch(e){location.href=u;}}
 var NICK_BLOCKLIST=['хуй','хуе','хуя','хер','пизд','ебат','ебал','ебан','ёбан','ебуч','муда','мудак','сука','сучк','бляд','блят','гандон','долбоеб','долбоёб','пидор','пидар','пидр','петух','гнида','урод','тварь','дебил','идиот','ублюд','нигер','негр','чурка','хач','жид','узкоглаз','член','залуп','сперм','мраз','fuck','shit','bitch','asshole','nigger','faggot','cunt','whore','retard','гитлер','hitler','сталин','путлер','гебельс','геббельс'];
 function normNick(s){s=(s||'').toLowerCase();s=s.replace(/0/g,'о').replace(/@/g,'а').replace(/3/g,'е').replace(/1/g,'и').replace(/4/g,'ч').replace(/\$/g,'с').replace(/[^a-zа-яё]/gi,'');return s;}
 function isNickBlocked(nick){var n=normNick(nick);if(!n)return false;for(var i=0;i<NICK_BLOCKLIST.length;i++){if(n.indexOf(NICK_BLOCKLIST[i])!==-1)return true;}return false;}
@@ -900,6 +901,11 @@ initTimerSettings();
 <div class="settings-modal" id="settings-modal">
   <div class="settings-box">
     <div class="settings-title">⚙️ Настройки</div>
+    <div class="settings-section" style="border-bottom:2px solid #FFD600;padding-bottom:14px;margin-bottom:4px;">
+      <div class="settings-label" style="color:#FFD600;">💬 Поддержка и обратная связь</div>
+      <div style="font-size:.72rem;color:#9aa;margin:-2px 0 9px;">Вопросы по игре, оплате и доступу, баги, идеи — напиши в бот, ответит поддержка</div>
+      <button class="btn btn-b" style="width:100%;min-height:42px" onclick="sndClick();openSupport()">💬 Написать в бот поддержки</button>
+    </div>
     <div class="settings-section">
       <div class="settings-label">🕹 Активные игры</div>
       <div id="room-history-content"></div>
@@ -978,7 +984,7 @@ initTimerSettings();
   <div class="settings-box" style="max-width:340px;position:relative;overflow:hidden;background:linear-gradient(rgba(10,15,45,.6),rgba(10,15,45,.82)),url('img/imgpremium-bg.jpg.jpg') center/cover no-repeat;border-color:#FFD600;">
     <div style="font-family:'Russo One',sans-serif;font-size:1.3rem;font-weight:900;color:#fff;text-align:center;margin-bottom:8px;">Хайпанём немножечко? 🔥</div>
     <div style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 18px;text-align:center;font-weight:600">
-      Премиум подключает один игрок, а играют все вместе — по коду комнаты, бесплатно. Доступ ко всем платным рубрикам открывается навсегда.
+      Один игрок в комнате подключает премиум — полный доступ получают все, кто играет по коду. Открывает все платные рубрики («Кино и сериалы», «Микс» и будущие) и убирает рекламу. Покупка навсегда, разовая.
     </div>
     <button class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccess()">⭐ Оплатить Stars</button>
     <button class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyKinoAccessCard()">💳 Карта / СБП · 149 ₽</button>
