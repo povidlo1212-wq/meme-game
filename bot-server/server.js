@@ -239,6 +239,44 @@ app.get('/_stats', async (req, res) => {
   }
 });
 
+// Leaderboard admin (temporary): list + delete test entries.
+//   GET  /_players?token=<SECRET>                 -> list all leaderboard rows
+//   GET  /_players/rm?token=<SECRET>&pids=a,b,c   -> delete those keys from players/
+app.get('/_players', async (req, res) => {
+  if (req.query.token !== WEBHOOK_SECRET) return res.status(403).send('forbidden');
+  try {
+    const snap = await db.ref('players').get();
+    const v = snap.exists() ? snap.val() : {};
+    const rows = Object.keys(v).map((k) => ({
+      pid: k,
+      nick: v[k].nick || '',
+      matchWins: v[k].matchWins || 0,
+      matches: v[k].matches || 0,
+      games: v[k].games || 0,
+      wins: v[k].wins || 0,
+      updatedAt: v[k].updatedAt || 0,
+    }));
+    rows.sort((a, b) => b.matchWins - a.matchWins || b.updatedAt - a.updatedAt);
+    res.json({ count: rows.length, rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/_players/rm', async (req, res) => {
+  if (req.query.token !== WEBHOOK_SECRET) return res.status(403).send('forbidden');
+  const pids = String(req.query.pids || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!pids.length) return res.status(400).json({ error: 'no pids' });
+  try {
+    const updates = {};
+    for (const p of pids) updates['players/' + p] = null;
+    await db.ref().update(updates);
+    res.json({ removed: pids });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- API: check access ---
 app.post('/api/check-access', async (req, res) => {
   const user = validateInitData(req.body.initData);
@@ -612,7 +650,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-const VERSION = 'support-bot 2026-09-08b (review button)';
+const VERSION = 'support-bot 2026-09-08c (review + leaderboard admin)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT} (${VERSION})`));
