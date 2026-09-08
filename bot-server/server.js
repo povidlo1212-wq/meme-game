@@ -393,13 +393,42 @@ async function logSupport(fromUser, text, kind) {
 
 async function notifyOwner(fromUser, text, kind) {
   if (!OWNER_CHAT_ID) return;
-  const who = fromUser.username ? '@' + fromUser.username : (fromUser.first_name || '');
+  const who = fromUser.username ? '@' + fromUser.username : (fromUser.first_name || 'без имени');
   try {
     await tgCall('sendMessage', {
       chat_id: OWNER_CHAT_ID,
-      text: `📨 ${kind === 'bug' ? 'БАГ/ИДЕЯ' : 'поддержка'} от ${who} (id ${fromUser.id}):\n\n${String(text || '').slice(0, 2000)}`,
+      text:
+        `📨 ${kind === 'bug' ? 'БАГ/ИДЕЯ' : 'поддержка'} от ${who} (id ${fromUser.id}):\n\n` +
+        `${String(text || '').slice(0, 2000)}\n\n` +
+        `↩️ Ответь на это сообщение (свайп «Ответить») — бот перешлёт твой ответ игроку.`,
     });
   } catch (e) { /* best effort */ }
+}
+
+const OWNER = OWNER_CHAT_ID ? String(OWNER_CHAT_ID) : '';
+
+// Owner swiped "Reply" on a 📨 forward -> relay that reply back to the player.
+async function handleOwnerReply(msg) {
+  const src = String((msg.reply_to_message && msg.reply_to_message.text) || '');
+  const m = src.match(/\(id (\d+)\):/);
+  if (!m) {
+    await tgCall('sendMessage', {
+      chat_id: OWNER,
+      text: 'Не вижу id игрока в этом сообщении. Отвечай свайпом именно на уведомление «📨 …».',
+    });
+    return;
+  }
+  const targetId = m[1];
+  const r = await tgCall('sendMessage', {
+    chat_id: targetId,
+    text: '💬 Ответ от поддержки:\n\n' + String(msg.text || '').slice(0, 3000),
+  });
+  await tgCall('sendMessage', {
+    chat_id: OWNER,
+    text: r.ok
+      ? `✅ Отправлено игроку ${targetId}.`
+      : `⚠️ Не смог отправить игроку ${targetId}. Возможно, он не начинал диалог с ботом или заблокировал его.`,
+  });
 }
 
 async function sendMenu(chatId, text) {
@@ -451,6 +480,15 @@ async function handleTextMessage(msg) {
     return sendMenu(chatId, WELCOME);
   }
 
+  // Owner texting the bot directly (not a reply): don't forward it back to himself.
+  if (OWNER && String(from.id) === OWNER) {
+    await tgCall('sendMessage', {
+      chat_id: chatId,
+      text: 'Это твой бот поддержки. Чтобы ответить игроку — свайпни «Ответить» на его уведомление «📨 …».',
+    });
+    return;
+  }
+
   const pend = _awaiting.get(from.id);
   if (pend && Date.now() - pend.ts < AWAIT_TTL_MS) {
     _awaiting.delete(from.id);
@@ -497,6 +535,19 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
 
     if (update.callback_query) {
       await handleCallback(update.callback_query);
+      return;
+    }
+
+    // Owner replied (swipe) to a 📨 forward -> relay to the player.
+    if (
+      OWNER &&
+      update.message &&
+      update.message.from &&
+      String(update.message.from.id) === OWNER &&
+      update.message.reply_to_message &&
+      typeof update.message.text === 'string'
+    ) {
+      await handleOwnerReply(update.message);
       return;
     }
 
