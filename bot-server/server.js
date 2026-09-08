@@ -161,10 +161,10 @@ async function tgCall(method, body) {
       body: JSON.stringify(body),
     });
     const json = await res.json();
-    console.log(`[tg] ${method} -> ok=${json.ok}${json.ok ? '' : ' ' + JSON.stringify(json)}`);
+    if (!json.ok) console.error(`${method} failed:`, JSON.stringify(json));
     return json;
   } catch (e) {
-    console.error(`[tg] ${method} THREW:`, e && e.message ? e.message : e);
+    console.error(`${method} threw:`, e && e.message ? e.message : e);
     return { ok: false, error: String(e) };
   }
 }
@@ -472,34 +472,10 @@ async function handleTextMessage(msg) {
   );
 }
 
-// --- TEMP diagnostic: hit this to test outbound sendMessage ---
-//   GET /_diag?chat_id=123456   -> returns the raw Telegram response
-app.get('/_diag', async (req, res) => {
-  const chatId = req.query.chat_id || OWNER_CHAT_ID;
-  if (!chatId) return res.json({ error: 'pass ?chat_id= or set OWNER_CHAT_ID' });
-  const r = await tgCall('sendMessage', {
-    chat_id: chatId,
-    text: '🔧 _diag: если ты это видишь — исходящие сообщения работают.',
-    reply_markup: MENU,
-  });
-  res.json({ botTokenTail: String(BOT_TOKEN).slice(-6), ownerSet: !!OWNER_CHAT_ID, tg: r });
-});
-
 // --- Telegram webhook ---
 app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   const update = req.body;
   res.sendStatus(200); // ack immediately, process after
-
-  const kind = update.pre_checkout_query
-    ? 'pre_checkout'
-    : update.callback_query
-    ? 'callback:' + (update.callback_query.data || '')
-    : update.message && update.message.successful_payment
-    ? 'payment'
-    : update.message && typeof update.message.text === 'string'
-    ? 'text:' + JSON.stringify(String(update.message.text).slice(0, 40))
-    : 'other';
-  console.log(`[hook] update ${update.update_id} kind=${kind}`);
 
   try {
     if (update.pre_checkout_query) {
@@ -533,7 +509,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-const BUILD_MARKER = 'support-bot-v3 diag+faq (build 2026-09-08c)';
-app.get('/', (req, res) => res.send('meme-game-bot-server is running — ' + BUILD_MARKER));
+const VERSION = 'support-bot 2026-09-08';
+app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
-app.listen(PORT, () => console.log(`Listening on port ${PORT} — ${BUILD_MARKER}`));
+app.listen(PORT, () => console.log(`Listening on port ${PORT} (${VERSION})`));
