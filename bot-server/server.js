@@ -188,6 +188,57 @@ async function tbankCall(method, params) {
   return res.json();
 }
 
+// --- Marketing source tracking ---
+// Deep links carry ?startapp=s_<source> (or /start s_<source> in the bot).
+// We attribute each Telegram user to the FIRST source they arrived from, and
+// also keep a daily hit counter per source for trends.
+function cleanSource(s) {
+  return String(s || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 32).toLowerCase();
+}
+async function trackSource(src, uid) {
+  src = cleanSource(src);
+  if (!src || !uid) return;
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    const firstRef = db.ref('sourceFirstTouch/' + uid);
+    const snap = await firstRef.get();
+    if (!snap.exists()) {
+      await firstRef.set({ src, at: admin.database.ServerValue.TIMESTAMP });
+      await db.ref('sources/' + src + '/users/' + uid).set(true);
+      await db.ref('sources/' + src + '/total').transaction((n) => (n || 0) + 1);
+    }
+    await db.ref('sources/' + src + '/daily/' + day).transaction((n) => (n || 0) + 1);
+  } catch (e) {
+    console.error('trackSource error:', e.message);
+  }
+}
+
+app.post('/api/track', async (req, res) => {
+  const user = validateInitData(req.body.initData);
+  if (!user) return res.json({ ok: false });
+  await trackSource(req.body.source, user.id);
+  res.json({ ok: true });
+});
+
+// Simple stats readout: /_stats?token=<WEBHOOK_SECRET>
+app.get('/_stats', async (req, res) => {
+  if (req.query.token !== WEBHOOK_SECRET) return res.status(403).send('forbidden');
+  try {
+    const snap = await db.ref('sources').get();
+    const v = snap.exists() ? snap.val() : {};
+    const out = {};
+    for (const src of Object.keys(v)) {
+      out[src] = {
+        unique_users: v[src].total || Object.keys(v[src].users || {}).length,
+        daily: v[src].daily || {},
+      };
+    }
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // --- API: check access ---
 app.post('/api/check-access', async (req, res) => {
   const user = validateInitData(req.body.initData);
@@ -476,6 +527,10 @@ async function handleTextMessage(msg) {
   }
 
   if (raw === '/start' || raw === '/help' || raw === '/menu' || raw.startsWith('/start ')) {
+    if (raw.startsWith('/start ')) {
+      const sp = raw.slice(7).trim();
+      if (sp.indexOf('s_') === 0) trackSource(sp.slice(2), from.id).catch(() => {});
+    }
     _awaiting.delete(from.id);
     return sendMenu(chatId, WELCOME);
   }
