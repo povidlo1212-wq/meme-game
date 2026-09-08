@@ -480,15 +480,6 @@ async function handleTextMessage(msg) {
     return sendMenu(chatId, WELCOME);
   }
 
-  // Owner texting the bot directly (not a reply): don't forward it back to himself.
-  if (OWNER && String(from.id) === OWNER) {
-    await tgCall('sendMessage', {
-      chat_id: chatId,
-      text: 'Это твой бот поддержки. Чтобы ответить игроку — свайпни «Ответить» на его уведомление «📨 …».',
-    });
-    return;
-  }
-
   const pend = _awaiting.get(from.id);
   if (pend && Date.now() - pend.ts < AWAIT_TTL_MS) {
     _awaiting.delete(from.id);
