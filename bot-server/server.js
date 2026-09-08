@@ -375,6 +375,7 @@ const MENU = {
     [{ text: '🧩 Рубрики и полный доступ', callback_data: 'faq:rubrics' }],
     [{ text: '💳 Как оплатить', callback_data: 'faq:pay' }],
     [{ text: '🧾 Проверить мою оплату', callback_data: 'faq:status' }],
+    [{ text: '⭐ Оставить отзыв', callback_data: 'ask:review' }],
     [
       { text: '🐞 Баг или идея', callback_data: 'ask:bug' },
       { text: '✍️ Свой вопрос', callback_data: 'ask:question' },
@@ -399,7 +400,7 @@ function rlOk(tgId) {
 }
 
 // --- "next message from this user is a bug report / free question" state ---
-const _awaiting = new Map(); // tgId -> { mode: 'bug'|'question', ts }
+const _awaiting = new Map(); // tgId -> { mode: 'bug'|'question'|'review', ts }
 const AWAIT_TTL_MS = 15 * 60 * 1000;
 
 function fmtAgo(ms) {
@@ -449,7 +450,7 @@ async function notifyOwner(fromUser, text, kind) {
     await tgCall('sendMessage', {
       chat_id: OWNER_CHAT_ID,
       text:
-        `📨 ${kind === 'bug' ? 'БАГ/ИДЕЯ' : 'поддержка'} от ${who} (id ${fromUser.id}):\n\n` +
+        `📨 ${kind === 'bug' ? 'БАГ/ИДЕЯ' : kind === 'review' ? 'ОТЗЫВ ⭐' : 'поддержка'} от ${who} (id ${fromUser.id}):\n\n` +
         `${String(text || '').slice(0, 2000)}\n\n` +
         `↩️ Ответь на это сообщение (свайп «Ответить») — бот перешлёт твой ответ игроку.`,
     });
@@ -502,11 +503,14 @@ async function handleCallback(cq) {
   if (data === 'faq:pay') return sendMenu(chatId, FAQ.pay);
   if (data === 'faq:status') return sendMenu(chatId, await paymentStatusText(userId));
 
-  if (data === 'ask:bug' || data === 'ask:question') {
-    _awaiting.set(userId, { mode: data === 'ask:bug' ? 'bug' : 'question', ts: Date.now() });
+  if (data === 'ask:bug' || data === 'ask:question' || data === 'ask:review') {
+    const mode = data === 'ask:bug' ? 'bug' : data === 'ask:review' ? 'review' : 'question';
+    _awaiting.set(userId, { mode, ts: Date.now() });
     const t =
-      data === 'ask:bug'
+      mode === 'bug'
         ? '🐞 Опиши баг или идею одним сообщением: что делал, что пошло не так, телефон или ПК. Разработчик увидит и ответит здесь.'
+        : mode === 'review'
+        ? '⭐ Напиши свой отзыв об игре одним сообщением — что понравилось, что нет, чего не хватает. Разработчик всё прочитает.'
         : '✍️ Напиши свой вопрос одним сообщением — разработчик ответит здесь.';
     await tgCall('sendMessage', { chat_id: chatId, text: t });
     return;
@@ -542,7 +546,9 @@ async function handleTextMessage(msg) {
     await notifyOwner(from, raw, pend.mode);
     await sendMenu(
       chatId,
-      'Спасибо! Передал разработчику — ответ придёт сюда же. Пока можешь глянуть быстрые ответы:',
+      pend.mode === 'review'
+        ? 'Спасибо за отзыв! 🙌 Разработчик всё прочитает. Если оставил вопрос — ответ придёт сюда же.'
+        : 'Спасибо! Передал разработчику — ответ придёт сюда же. Пока можешь глянуть быстрые ответы:',
     );
     return;
   }
@@ -606,7 +612,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-const VERSION = 'support-bot 2026-09-08';
+const VERSION = 'support-bot 2026-09-08b (review button)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT} (${VERSION})`));
