@@ -533,6 +533,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.send('meme-game-bot-server is running'));
+const BUILD_MARKER = 'support-bot-v3 diag+faq (build 2026-09-08c)';
+app.get('/', (req, res) => res.send('meme-game-bot-server is running — ' + BUILD_MARKER));
 
-app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+app.listen(PORT, () => console.log(`Listening on port ${PORT} — ${BUILD_MARKER}`));
