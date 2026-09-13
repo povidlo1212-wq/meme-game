@@ -570,7 +570,7 @@ function buyKinoAccessCard(){
 updateKinoButton();
 checkKinoAccess();
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){checkKinoAccess();try{resumeAllAudio();}catch(e){}}});
-function showScreen(id){try{_adbg('showScreen '+id);}catch(e0){}document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(typeof resetGameZoom==='function')resetGameZoom();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(typeof resetGameZoom==='function')resetGameZoom();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
 function openRules(){showScreen('s-rules');var bg=document.getElementById('rules-float-bg');if(bg&&!bg.children.length){['🐸','🐕','😏','🌈','🐧','🔥','😤','🦖','🧙','😎','🐌','💍','🖖','🥣','✊','🎃','😱','🤦','😲','🎭'].forEach(function(e,i){var d=document.createElement('div');d.className='float-meme';d.textContent=e;d.style.left=(3+i*5)+'%';d.style.top=(8+Math.random()*78)+'%';d.style.animationDelay=(i*.45)+'s';d.style.animationDuration=(6+Math.random()*6)+'s';bg.appendChild(d);});}}
 
 const SFX={startup:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Startup.wav',shutdown:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Shutdown.wav',click:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Start.wav',error:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Ding.wav',plug:'audio-millennials/plug.mp3',unplug:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Logoff%20Sound.wav',folder:'https://lelegofrog.github.io/lelegodlex/win/xp/Windows%20XP%20Menu%20Command.wav'};
@@ -581,7 +581,7 @@ var sfxOn=true,musicOn=true,audioUnlocked=false,bgMusic=null,currentMusicKey='ho
 function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;var ctx=getAudioCtx();if(ctx&&ctx.state==='suspended')ctx.resume().catch(function(){});preloadSfx(ACTIVE_CATEGORY==='zoomers'?SFX_ZOOMERS:(ACTIVE_CATEGORY==='kino'?SFX_KINO:(ACTIVE_CATEGORY==='combo'?SFX_COMBO:SFX)));if(musicOn&&musicVolume>0)startMusic();}
 function toggleMusic(){audioUnlocked=true;musicOn=!musicOn;if(musicOn){if(musicVolume<=0){musicVolume=0.07;var s=document.getElementById('music-vol-slider');if(s)s.value=50;var l=document.getElementById('music-vol-lbl');if(l)l.textContent='50%';}if(bgMusic)bgMusic.volume=musicVolume;startMusic();}else{if(bgMusic)bgMusic.pause();}syncAudioUI();}
 function toggleSfx(){sfxOn=!sfxOn;if(sfxOn&&sfxVolume<=0){sfxVolume=0.7;var s=document.getElementById('sfx-vol-slider');if(s)s.value=70;var l=document.getElementById('sfx-vol-lbl');if(l)l.textContent='70%';}syncAudioUI();}
-function resumeAllAudio(){try{if(_audioCtx&&_audioCtx.state==='suspended'){try{_adbg('resumeAllAudio: ctx suspended, resuming');}catch(e0){}_audioCtx.resume().catch(function(){});}}catch(e){}try{if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused){try{_adbg('resumeAllAudio: bg paused, resuming');}catch(e0){}bgMusic.play().catch(function(err){try{_adbg('resumeAllAudio: bg resume FAILED '+(err&&err.name));}catch(e1){}});}}catch(e){}}
+function resumeAllAudio(){try{if(_audioCtx&&_audioCtx.state==='suspended')_audioCtx.resume().catch(function(){});}catch(e){}try{if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused)bgMusic.play().catch(function(){});}catch(e){}}
 function tryStartMusic(){resumeAllAudio();}
 document.addEventListener('click',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}});
 document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}},{passive:true});
@@ -589,58 +589,26 @@ document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio
 // swapped when the rubric changes. Recreating a new Audio() per switch (the old
 // approach) meant each switch left a fresh element that mobile WebViews don't
 // always keep playing reliably; reusing one avoids that churn entirely.
-// TEMPORARY on-screen audio diagnostics - remove once the real cause is found.
-// Shows a tiny live log in the corner so we can see what actually happens on a
-// real phone at the moment sound dies, instead of guessing blind.
-var _adbgLog=[];
-function _adbg(msg){try{_adbgLog.push(new Date().toISOString().slice(11,19)+'.'+(Date.now()%1000)+' '+msg);if(_adbgLog.length>60)_adbgLog.shift();_adbgRender();}catch(e){}}
-function _adbgRender(){
-  try{
-    var el=document.getElementById('adbg-panel');
-    if(!el){
-      el=document.createElement('div');
-      el.id='adbg-panel';
-      el.style.cssText='position:fixed;top:0;left:0;right:0;z-index:999999;background:rgba(0,0,0,.88);color:#0f0;font:9px/1.3 monospace;padding:4px 6px;max-height:38vh;overflow-y:auto;white-space:pre-wrap;pointer-events:none;';
-      (document.body||document.documentElement).appendChild(el);
-    }
-    var ctxState=_audioCtx?_audioCtx.state:'(none)';
-    var bm=bgMusic?('key='+bgMusic._musicKey+' paused='+bgMusic.paused+' rs='+bgMusic.readyState+' ns='+bgMusic.networkState+' err='+(bgMusic.error?bgMusic.error.code:'-')+' vol='+bgMusic.volume.toFixed(2)+' t='+bgMusic.currentTime.toFixed(1)):'(none)';
-    el.textContent='unlocked='+audioUnlocked+' musicOn='+musicOn+' sfxOn='+sfxOn+' ctx='+ctxState+'\nbg: '+bm+'\n'+_adbgLog.slice(-14).join('\n');
-  }catch(e){}
-}
-setInterval(_adbgRender,500);
-document.addEventListener('DOMContentLoaded',_adbgRender);
-try{
-  window.addEventListener('pagehide',function(){_adbg('pagehide');});
-  document.addEventListener('visibilitychange',function(){_adbg('visibilitychange -> '+document.visibilityState);});
-}catch(e){}
 function ensureBgMusicEl(){
   if(bgMusic)return bgMusic;
   bgMusic=new Audio();
   bgMusic.loop=true;
   bgMusic.preload='auto';
-  ['pause','play','playing','canplay','canplaythrough','error','stalled','suspend','waiting','emptied','abort','ended'].forEach(function(type){
-    bgMusic.addEventListener(type,function(){
-      var extra='';
-      if(type==='error'&&bgMusic.error)extra=' code='+bgMusic.error.code;
-      _adbg('bg:'+type+extra+' (key='+bgMusic._musicKey+')');
-    });
-  });
   // Self-healing: if the OS/browser/an ad pauses this out from under us while it's
   // supposed to be playing, try to bring it back shortly instead of staying silent.
   bgMusic.addEventListener('pause',function(){
-    if(musicOn&&audioUnlocked&&musicVolume>0){setTimeout(function(){if(bgMusic&&musicOn&&audioUnlocked&&bgMusic.paused){_adbg('watchdog: resuming after pause');bgMusic.play().then(function(){_adbg('watchdog: resume OK');}).catch(function(err){_adbg('watchdog: resume FAILED: '+(err&&err.name));});}},350);}
+    if(musicOn&&audioUnlocked&&musicVolume>0){setTimeout(function(){if(bgMusic&&musicOn&&audioUnlocked&&bgMusic.paused)bgMusic.play().catch(function(){});},350);}
   });
-  bgMusic.addEventListener('canplay',function(){if(musicOn&&audioUnlocked)bgMusic.play().catch(function(err){_adbg('canplay-play FAILED: '+(err&&err.name));});});
+  bgMusic.addEventListener('canplay',function(){if(musicOn&&audioUnlocked)bgMusic.play().catch(function(){});});
   return bgMusic;
 }
-function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;var _url=CATEGORY_MUSIC[currentMusicKey]||CATEGORY_MUSIC.home;var el=ensureBgMusicEl();try{_adbg('startMusic key='+currentMusicKey+(el._musicKey!==currentMusicKey?' (switching src)':' (same src)'));}catch(e0){}if(el._musicKey!==currentMusicKey){el._musicKey=currentMusicKey;el.src=_url;el.load();}el.volume=musicVolume;el.play().then(function(){try{_adbg('startMusic play() OK');}catch(e0){}}).catch(function(err){try{_adbg('startMusic play() FAILED '+(err&&err.name));}catch(e0){}var mk=currentMusicKey;setTimeout(function(){if(bgMusic&&bgMusic._musicKey===mk&&musicOn&&audioUnlocked){bgMusic.play().catch(function(){});}},900);});}function switchMusic(key){if(currentMusicKey===key)return;try{_adbg('switchMusic '+currentMusicKey+' -> '+key);}catch(e0){}currentMusicKey=key;if(audioUnlocked&&musicOn)startMusic();}
+function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;var _url=CATEGORY_MUSIC[currentMusicKey]||CATEGORY_MUSIC.home;var el=ensureBgMusicEl();if(el._musicKey!==currentMusicKey){el._musicKey=currentMusicKey;el.src=_url;el.load();}el.volume=musicVolume;el.play().catch(function(){var mk=currentMusicKey;setTimeout(function(){if(bgMusic&&bgMusic._musicKey===mk&&musicOn&&audioUnlocked){bgMusic.play().catch(function(){});}},900);});}function switchMusic(key){if(currentMusicKey===key)return;currentMusicKey=key;if(audioUnlocked&&musicOn)startMusic();}
 var _sfxCache={},_sfxLoading={},_sfxBuffers={},_sfxFailed={},_audioCtx=null;
 function getAudioCtx(){if(!_audioCtx){try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return _audioCtx;}
 function getSfxAudio(url){var a=_sfxCache[url];if(!a){a=new Audio(url);a.preload='auto';_sfxCache[url]=a;}return a;}
 function preloadOneSfx(url){if(_sfxBuffers[url]||_sfxLoading[url]||_sfxFailed[url])return;_sfxLoading[url]=true;var ctx=getAudioCtx();function giveUp(){delete _sfxLoading[url];_sfxFailed[url]=true;var _el=getSfxAudio(url);if(_el.paused)_el.load();}try{fetch(url).then(function(r){return r.arrayBuffer();}).then(function(buf){if(!ctx){giveUp();return;}ctx.decodeAudioData(buf,function(decoded){_sfxBuffers[url]=decoded;delete _sfxLoading[url];},giveUp);}).catch(giveUp);}catch(e){giveUp();}}
 function preloadSfx(map){try{Object.keys(map).forEach(function(k){preloadOneSfx(map[k]);});}catch(e){}}
-function snd(k,v){if(!sfxOn||!audioUnlocked)return;try{var map=ACTIVE_CATEGORY==='zoomers'?SFX_ZOOMERS:(ACTIVE_CATEGORY==='kino'?SFX_KINO:(ACTIVE_CATEGORY==='combo'?SFX_COMBO:SFX));var url=map[k];if(!url)return;var ctx=getAudioCtx();var buf=_sfxBuffers[url];if(ctx&&buf){try{_adbg('snd:'+k+' via buffer, ctx='+ctx.state);}catch(e0){}if(ctx.state==='suspended')ctx.resume().catch(function(){});var src=ctx.createBufferSource();src.buffer=buf;var gain=ctx.createGain();gain.gain.value=sfxVolume*(v||1);src.connect(gain).connect(ctx.destination);src.start(0);}else{try{_adbg('snd:'+k+' via <audio> fallback');}catch(e0){}var a=getSfxAudio(url);try{a.currentTime=0;}catch(e2){}a.volume=sfxVolume*(v||1);a.play().catch(function(err){try{_adbg('snd:'+k+' fallback play FAILED '+(err&&err.name));}catch(e0){}});}}catch(e){}}
+function snd(k,v){if(!sfxOn||!audioUnlocked)return;try{var map=ACTIVE_CATEGORY==='zoomers'?SFX_ZOOMERS:(ACTIVE_CATEGORY==='kino'?SFX_KINO:(ACTIVE_CATEGORY==='combo'?SFX_COMBO:SFX));var url=map[k];if(!url)return;var ctx=getAudioCtx();var buf=_sfxBuffers[url];if(ctx&&buf){if(ctx.state==='suspended')ctx.resume().catch(function(){});var src=ctx.createBufferSource();src.buffer=buf;var gain=ctx.createGain();gain.gain.value=sfxVolume*(v||1);src.connect(gain).connect(ctx.destination);src.start(0);}else{var a=getSfxAudio(url);try{a.currentTime=0;}catch(e2){}a.volume=sfxVolume*(v||1);a.play().catch(function(){});}}catch(e){}}
 var musicVolume=0.07,sfxVolume=0.7;
 function loadStats(){try{var s=localStorage.getItem('mm_stats');var st=s?JSON.parse(s):{games:0,wins:0,sits:{}};if(typeof st.matches!=='number')st.matches=0;if(typeof st.matchWins!=='number')st.matchWins=0;return st;}catch(e){return{games:0,wins:0,sits:{},matches:0,matchWins:0};}}
 function saveStats(st){try{localStorage.setItem('mm_stats',JSON.stringify(st));}catch(e){}}
@@ -802,7 +770,7 @@ function pauseVisualTimers(){if(sitPerRaf){cancelAnimationFrame(sitPerRaf);sitPe
 function resumeVisualTimers(){if(!G)return;if(G.phase==='sit-choose'&&sitPerRem>0&&G.sitTimer){sitPerEnd=performance.now()+sitPerRem;var ms1=G.sitTimer*1000;(function tick(){if(paused)return;var el=document.querySelector('.sit-fill');var rem=sitPerEnd-performance.now();if(el)el.style.width=Math.max(0,rem/ms1*100)+'%';if(rem>0)sitPerRaf=requestAnimationFrame(tick);}());}if(G.phase==='submitting'&&subBarRem>0&&G.subTimer){subBarEnd=performance.now()+subBarRem;var ms2=G.subTimer*1000;(function tick(){if(paused)return;var el=$('sub-fill');var rem=subBarEnd-performance.now();if(el)el.style.width=Math.max(0,rem/ms2*100)+'%';if(rem>0)subBarRaf=requestAnimationFrame(tick);}());}if(G.phase==='judging'&&judgeBarRem>0&&G.judgeTimer){judgeBarEnd=performance.now()+judgeBarRem;var ms3=G.judgeTimer*1000;(function tick(){if(paused)return;var el=$('judge-fill');var el2=$('judge-fill-mob');var rem=judgeBarEnd-performance.now();var pct=Math.max(0,rem/ms3*100)+'%';if(el)el.style.width=pct;if(el2)el2.style.width=pct;if(rem>0)judgeBarRaf=requestAnimationFrame(tick);}());}}
 
 var selectedScore=10;
-function setScore(v,btn){try{_adbg('setScore('+v+') tapped');}catch(e0){}selectedScore=v;document.querySelectorAll('.score-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');}
+function setScore(v,btn){selectedScore=v;document.querySelectorAll('.score-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');}
 var selectedSitTimer=0,selectedSubTimer=0,selectedJudgeTimer=0;
 function setTimer(kind,v,btn){if(kind==='sit')selectedSitTimer=v;else if(kind==='sub')selectedSubTimer=v;else if(kind==='judge')selectedJudgeTimer=v;try{localStorage.setItem('mm_timer_'+kind,v);}catch(e){}btn.parentElement.querySelectorAll('.score-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');}
 function initTimerSettings(){['sit','sub','judge'].forEach(function(kind){var saved=null;try{saved=localStorage.getItem('mm_timer_'+kind);}catch(e){}if(saved===null)return;var v=parseInt(saved,10)||0;if(kind==='sit')selectedSitTimer=v;else if(kind==='sub')selectedSubTimer=v;else if(kind==='judge')selectedJudgeTimer=v;var picker=document.getElementById(kind+'-timer-picker');if(!picker)return;var btns=picker.querySelectorAll('.score-btn');btns.forEach(function(b){b.classList.remove('active');if(parseInt(b.getAttribute('data-v'),10)===v)b.classList.add('active');});});}
