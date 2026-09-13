@@ -569,7 +569,7 @@ function buyKinoAccessCard(){
 }
 updateKinoButton();
 checkKinoAccess();
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')checkKinoAccess();});
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){checkKinoAccess();try{resumeAllAudio();}catch(e){}}});
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(typeof resetGameZoom==='function')resetGameZoom();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
 function openRules(){showScreen('s-rules');var bg=document.getElementById('rules-float-bg');if(bg&&!bg.children.length){['🐸','🐕','😏','🌈','🐧','🔥','😤','🦖','🧙','😎','🐌','💍','🖖','🥣','✊','🎃','😱','🤦','😲','🎭'].forEach(function(e,i){var d=document.createElement('div');d.className='float-meme';d.textContent=e;d.style.left=(3+i*5)+'%';d.style.top=(8+Math.random()*78)+'%';d.style.animationDelay=(i*.45)+'s';d.style.animationDuration=(6+Math.random()*6)+'s';bg.appendChild(d);});}}
 
@@ -581,10 +581,28 @@ var sfxOn=true,musicOn=true,audioUnlocked=false,bgMusic=null,currentMusicKey='ho
 function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;var ctx=getAudioCtx();if(ctx&&ctx.state==='suspended')ctx.resume().catch(function(){});preloadSfx(ACTIVE_CATEGORY==='zoomers'?SFX_ZOOMERS:(ACTIVE_CATEGORY==='kino'?SFX_KINO:(ACTIVE_CATEGORY==='combo'?SFX_COMBO:SFX)));if(musicOn&&musicVolume>0)startMusic();}
 function toggleMusic(){audioUnlocked=true;musicOn=!musicOn;if(musicOn){if(musicVolume<=0){musicVolume=0.07;var s=document.getElementById('music-vol-slider');if(s)s.value=50;var l=document.getElementById('music-vol-lbl');if(l)l.textContent='50%';}if(bgMusic)bgMusic.volume=musicVolume;startMusic();}else{if(bgMusic)bgMusic.pause();}syncAudioUI();}
 function toggleSfx(){sfxOn=!sfxOn;if(sfxOn&&sfxVolume<=0){sfxVolume=0.7;var s=document.getElementById('sfx-vol-slider');if(s)s.value=70;var l=document.getElementById('sfx-vol-lbl');if(l)l.textContent='70%';}syncAudioUI();}
-function tryStartMusic(){if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused){bgMusic.play().catch(function(){});}}
+function resumeAllAudio(){try{if(_audioCtx&&_audioCtx.state==='suspended')_audioCtx.resume().catch(function(){});}catch(e){}try{if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused)bgMusic.play().catch(function(){});}catch(e){}}
+function tryStartMusic(){resumeAllAudio();}
 document.addEventListener('click',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}});
 document.addEventListener('touchstart',function(){if(!audioUnlocked){unlockAudio();}else{tryStartMusic();}},{passive:true});
-function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;var _url=CATEGORY_MUSIC[currentMusicKey]||CATEGORY_MUSIC.home;if(!bgMusic||bgMusic._musicKey!==currentMusicKey){if(bgMusic){try{bgMusic.pause();bgMusic.removeAttribute('src');bgMusic.load();}catch(e){}}bgMusic=new Audio(_url);bgMusic.loop=true;bgMusic.preload='auto';bgMusic._musicKey=currentMusicKey;(function(m,k){m.addEventListener('canplay',function(){if(bgMusic===m&&musicOn&&audioUnlocked&&currentMusicKey===k){m.play().catch(function(){});}});})(bgMusic,currentMusicKey);}bgMusic.volume=musicVolume;bgMusic.play().catch(function(){var mk=currentMusicKey;setTimeout(function(){if(bgMusic&&bgMusic._musicKey===mk&&musicOn&&audioUnlocked){bgMusic.play().catch(function(){});}},900);});}function switchMusic(key){if(currentMusicKey===key)return;currentMusicKey=key;if(audioUnlocked&&musicOn)startMusic();}
+// Single persistent <audio> element reused for the whole session - just its src is
+// swapped when the rubric changes. Recreating a new Audio() per switch (the old
+// approach) meant each switch left a fresh element that mobile WebViews don't
+// always keep playing reliably; reusing one avoids that churn entirely.
+function ensureBgMusicEl(){
+  if(bgMusic)return bgMusic;
+  bgMusic=new Audio();
+  bgMusic.loop=true;
+  bgMusic.preload='auto';
+  // Self-healing: if the OS/browser/an ad pauses this out from under us while it's
+  // supposed to be playing, try to bring it back shortly instead of staying silent.
+  bgMusic.addEventListener('pause',function(){
+    if(musicOn&&audioUnlocked&&musicVolume>0){setTimeout(function(){if(bgMusic&&musicOn&&audioUnlocked&&bgMusic.paused)bgMusic.play().catch(function(){});},350);}
+  });
+  bgMusic.addEventListener('canplay',function(){if(musicOn&&audioUnlocked)bgMusic.play().catch(function(){});});
+  return bgMusic;
+}
+function startMusic(){if(!audioUnlocked||!musicOn||musicVolume<=0)return;var _url=CATEGORY_MUSIC[currentMusicKey]||CATEGORY_MUSIC.home;var el=ensureBgMusicEl();if(el._musicKey!==currentMusicKey){el._musicKey=currentMusicKey;el.src=_url;el.load();}el.volume=musicVolume;el.play().catch(function(){var mk=currentMusicKey;setTimeout(function(){if(bgMusic&&bgMusic._musicKey===mk&&musicOn&&audioUnlocked){bgMusic.play().catch(function(){});}},900);});}function switchMusic(key){if(currentMusicKey===key)return;currentMusicKey=key;if(audioUnlocked&&musicOn)startMusic();}
 var _sfxCache={},_sfxLoading={},_sfxBuffers={},_sfxFailed={},_audioCtx=null;
 function getAudioCtx(){if(!_audioCtx){try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return _audioCtx;}
 function getSfxAudio(url){var a=_sfxCache[url];if(!a){a=new Audio(url);a.preload='auto';_sfxCache[url]=a;}return a;}
@@ -653,7 +671,7 @@ var ADSGRAM_BLOCK_ID='int-35312';
 var AdsController=null;
 try{if(window.Adsgram)AdsController=window.Adsgram.init({blockId:ADSGRAM_BLOCK_ID});}catch(e){}
 function showInterstitialAd(){if(__kinoPaid)return;if(!AdsController)return;try{AdsController.show().then(function(){resumeMusicAfterAd();}).catch(function(){resumeMusicAfterAd();});}catch(e){resumeMusicAfterAd();}}
-function resumeMusicAfterAd(){try{if(musicOn&&audioUnlocked&&musicVolume>0&&bgMusic&&bgMusic.paused)bgMusic.play().catch(function(){});}catch(e){}}
+function resumeMusicAfterAd(){resumeAllAudio();}
 
 var firebaseConfig={apiKey:"AIzaSyDD4rGUeM0VRByb4nMWgJl426EQ85nOSO0",authDomain:"memes-millennials.firebaseapp.com",databaseURL:"https://memes-millennials-default-rtdb.europe-west1.firebasedatabase.app",projectId:"memes-millennials",storageBucket:"memes-millennials.firebasestorage.app",messagingSenderId:"445610408724",appId:"1:445610408724:web:b9ff7a66c7f2e45284a001"};
 var fbApp=null,fbDB=null;
