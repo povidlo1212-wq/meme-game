@@ -569,7 +569,7 @@ function buyKinoAccessCard(){
 }
 updateKinoButton();
 checkKinoAccess();
-document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')checkKinoAccess();});
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){checkKinoAccess();try{if(typeof musicOn!=='undefined'&&musicOn&&audioUnlocked&&musicVolume>0&&(!bgMusic||bgMusic.paused))startMusic();}catch(e){}}});
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));var el=document.getElementById(id);if(el)el.classList.add('active');syncAudioUI();if(typeof resetGameZoom==='function')resetGameZoom();if(id==='s-lobby'||id==='s-winner'){setTimeout(function(){if(document.getElementById(id)&&document.getElementById(id).classList.contains('active'))showInterstitialAd();},3000);}}
 function openRules(){showScreen('s-rules');var bg=document.getElementById('rules-float-bg');if(bg&&!bg.children.length){['🐸','🐕','😏','🌈','🐧','🔥','😤','🦖','🧙','😎','🐌','💍','🖖','🥣','✊','🎃','😱','🤦','😲','🎭'].forEach(function(e,i){var d=document.createElement('div');d.className='float-meme';d.textContent=e;d.style.left=(3+i*5)+'%';d.style.top=(8+Math.random()*78)+'%';d.style.animationDelay=(i*.45)+'s';d.style.animationDuration=(6+Math.random()*6)+'s';bg.appendChild(d);});}}
 
@@ -653,7 +653,8 @@ var ABLY_KEY='eDyd_A.ws_7wQ:eqfis2NeC2G-uIBKHoGuy_YzUvwXQYlALkc7b08vRbc';
 var ADSGRAM_BLOCK_ID='int-35312';
 var AdsController=null;
 try{if(window.Adsgram)AdsController=window.Adsgram.init({blockId:ADSGRAM_BLOCK_ID});}catch(e){}
-function showInterstitialAd(){if(__kinoPaid)return;if(!AdsController)return;try{AdsController.show().then(function(){}).catch(function(){});}catch(e){}}
+function showInterstitialAd(){if(__kinoPaid)return;if(!AdsController)return;try{AdsController.show().then(function(){resumeMusicAfterAd();}).catch(function(){resumeMusicAfterAd();});}catch(e){resumeMusicAfterAd();}}
+function resumeMusicAfterAd(){try{if(musicOn&&audioUnlocked&&musicVolume>0)startMusic();}catch(e){}}
 
 var firebaseConfig={apiKey:"AIzaSyDD4rGUeM0VRByb4nMWgJl426EQ85nOSO0",authDomain:"memes-millennials.firebaseapp.com",databaseURL:"https://memes-millennials-default-rtdb.europe-west1.firebasedatabase.app",projectId:"memes-millennials",storageBucket:"memes-millennials.firebasestorage.app",messagingSenderId:"445610408724",appId:"1:445610408724:web:b9ff7a66c7f2e45284a001"};
 var fbApp=null,fbDB=null;
@@ -926,23 +927,34 @@ function renderMobHand(){var grid=$('mob-hand-grid');if(!G)return;var me=G.playe
 (function(){
   var zEl=null,wEl=null,scale=1,tx=0,ty=0,pinching=false;
   var startDist=0,startScale=1,startTx=0,startTy=0,startMidX=0,startMidY=0;
-  var MAX_SCALE=2.5;
+  // one-finger pan, active only once already zoomed in (scale>1)
+  var possiblePan=false,panning1=false,panStartX=0,panStartY=0,panStartTx=0,panStartTy=0;
+  var PAN_THRESHOLD=8,MAX_SCALE=2.5;
   function active(){return isMob()&&document.getElementById('s-game').classList.contains('active');}
   function dist(a,b){var dx=b.clientX-a.clientX,dy=b.clientY-a.clientY;return Math.sqrt(dx*dx+dy*dy)||1;}
   function mid(a,b){return{x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
   function apply(){if(zEl)zEl.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')';}
   function clampPan(){if(!wEl)return;var r=wEl.getBoundingClientRect();var w=r.width*scale,h=r.height*scale;var minX=Math.min(0,r.width-w),minY=Math.min(0,r.height-h);if(tx>0)tx=0;if(tx<minX)tx=minX;if(ty>0)ty=0;if(ty<minY)ty=minY;}
   function reset(animate){scale=1;tx=0;ty=0;if(zEl){zEl.style.transition=animate?'transform .25s ease':'';apply();if(animate)setTimeout(function(){if(zEl)zEl.style.transition='';},260);}}
-  window.resetGameZoom=function(){pinching=false;reset(false);};
+  window.resetGameZoom=function(){pinching=false;possiblePan=false;panning1=false;reset(false);};
+  function beginPan1(touch){possiblePan=true;panning1=false;panStartX=touch.clientX;panStartY=touch.clientY;panStartTx=tx;panStartTy=ty;}
   function onStart(e){
-    if(e.touches.length===2&&active()){
+    if(!active())return;
+    if(e.touches.length===2){
       wEl=document.getElementById('mob-wrap');zEl=document.getElementById('mob-zoom');
       if(!wEl||!zEl)return;
+      possiblePan=false;panning1=false;
       pinching=true;zEl.style.transition='';
       startDist=dist(e.touches[0],e.touches[1]);startScale=scale;startTx=tx;startTy=ty;
       var m=mid(e.touches[0],e.touches[1]),r=wEl.getBoundingClientRect();
       startMidX=m.x-r.left;startMidY=m.y-r.top;
       e.preventDefault();e.stopPropagation();
+    }else if(e.touches.length===1&&scale>1){
+      wEl=wEl||document.getElementById('mob-wrap');zEl=zEl||document.getElementById('mob-zoom');
+      if(!wEl||!zEl)return;
+      pinching=false;
+      beginPan1(e.touches[0]);
+      // no preventDefault yet: could still turn out to be a plain tap
     }
   }
   function onMove(e){
@@ -957,16 +969,44 @@ function renderMobHand(){var grid=$('mob-hand-grid');if(!G)return;var me=G.playe
       ty=curMidY-(startMidY-startTy)*factor;
       scale=newScale;
       clampPan();apply();
+      return;
+    }
+    if((possiblePan||panning1)&&e.touches.length===1){
+      var t=e.touches[0];
+      var dx=t.clientX-panStartX,dy=t.clientY-panStartY;
+      if(!panning1){
+        if(Math.abs(dx)<PAN_THRESHOLD&&Math.abs(dy)<PAN_THRESHOLD)return; // still could be a tap
+        panning1=true;zEl.style.transition='';
+      }
+      e.preventDefault();e.stopPropagation();
+      tx=panStartTx+dx;ty=panStartTy+dy;
+      clampPan();apply();
     }
   }
   function onEnd(e){
     if(pinching){
-      if(e.touches.length<2){
+      if(e.touches.length===1){
+        // seamlessly hand off to one-finger panning with the remaining finger
+        pinching=false;
+        e.preventDefault();e.stopPropagation();
+        clampPan();apply();
+        if(scale>1){beginPan1(e.touches[0]);panning1=true;}
+        return;
+      }
+      if(e.touches.length===0){
         pinching=false;
         e.preventDefault();e.stopPropagation();
         if(scale<=1.02)reset(true);
         else{clampPan();zEl.style.transition='transform .15s ease';apply();setTimeout(function(){if(zEl)zEl.style.transition='';},160);}
       }
+      return;
+    }
+    if((possiblePan||panning1)&&e.touches.length===0){
+      if(panning1){
+        e.preventDefault();e.stopPropagation();
+        if(scale<=1.02)reset(true);
+      }
+      possiblePan=false;panning1=false;
     }
   }
   document.addEventListener('touchstart',onStart,{passive:false,capture:true});
