@@ -761,7 +761,7 @@ function sndError(){snd('error',.7);}
 function comingSoon(){sndError();alert('Скоро! Эта рубрика ещё в разработке 🙂');}
 function fitCoverBox(img){if(!img)return;function ap(){if(img.naturalWidth&&img.naturalHeight&&img.parentElement)img.parentElement.style.aspectRatio=img.naturalWidth+'/'+img.naturalHeight;}if(img.complete&&img.naturalWidth)ap();else img.addEventListener('load',ap,{once:true});}function enterHome(cat){ACTIVE_CATEGORY=cat;switchMusic(cat);preloadSfx(cat==='zoomers'?SFX_ZOOMERS:(cat==='kino'?SFX_KINO:(cat==='combo'?SFX_COMBO:SFX)));var img=document.getElementById('home-cover-img');if(img){img.src=(cat==='combo')?COMBO_COVER:((cat==='kino')?KINO_COVER:((cat==='zoomers')?ZOOMER_COVER:'https://i.ibb.co/zKkqdX9/image.jpg'));}updateHomeAccessUI();var _s=loadSession();var _hc=$('h-code');if(_hc)_hc.value=(_s&&_s.roomCode)?_s.roomCode:'';showScreen('s-home');}document.querySelectorAll('.cat-thumb img[alt="Мемы миллениалов"],.cat-thumb img[alt="Мемы зумеров"],.cat-thumb img[alt="Мемы из фильмов и сериалов"]').forEach(fitCoverBox);
 function showWinnerStrip(txt){var ws=$('winner-strip'),mws=$('mob-winner-strip');if(ws){ws.textContent=txt;ws.classList.add('show');}if(mws){mws.textContent=txt;mws.classList.add('show');requestAnimationFrame(updateMobCardsInset);}}
-function updateMobCardsInset(){var cards=$('mob-cards');if(!cards)return;var mh=$('mob-hand');var ws=$('mob-winner-strip');var sit=$('mob-sit');var mw=$('mob-wrap');var mp=$('mob-players');var handH=mh?mh.offsetHeight:0;if(mw&&mp&&sit){var gap=2;var y=(mp.getBoundingClientRect().bottom-mw.getBoundingClientRect().top)+gap;if(ws&&ws.classList.contains('show')){ws.style.top=y+'px';y+=ws.offsetHeight+gap;}sit.style.top=y+'px';y+=sit.offsetHeight+gap;cards.style.top=y+'px';}cards.style.bottom=(handH+4)+'px';}
+function updateMobCardsInset(){var cards=$('mob-cards');if(!cards)return;var mh=$('mob-hand');var ws=$('mob-winner-strip');var sit=$('mob-sit');var mw=$('mob-wrap');var mp=$('mob-players');var handH=mh?mh.offsetHeight:0;if(mw&&mp&&sit){var gap=2;var y=(mp.offsetTop+mp.offsetHeight)+gap;if(ws&&ws.classList.contains('show')){ws.style.top=y+'px';y+=ws.offsetHeight+gap;}sit.style.top=y+'px';y+=sit.offsetHeight+gap;cards.style.top=y+'px';}cards.style.bottom=(handH+4)+'px';}
 function hideWinnerStrip(){var ws=$('winner-strip'),mws=$('mob-winner-strip');if(ws)ws.classList.remove('show');if(mws){mws.classList.remove('show');requestAnimationFrame(updateMobCardsInset);}}
 
 function saveSession(){try{var data={roomCode:roomCode,id:ME.id,nick:ME.nick,avUrl:ME.avUrl,isHost:isHost};if(isHost&&HOST)data.hostState=JSON.stringify(HOST);localStorage.setItem('mm_session',JSON.stringify(data));}catch(e){}}
@@ -951,8 +951,10 @@ function renderMobHand(){var grid=$('mob-hand-grid');if(!G)return;var me=G.playe
       var d=dist(e.touches[0],e.touches[1]);
       var newScale=Math.min(MAX_SCALE,Math.max(1,startScale*(d/startDist)));
       var factor=newScale/startScale;
-      tx=startMidX-(startMidX-startTx)*factor;
-      ty=startMidY-(startMidY-startTy)*factor;
+      var m=mid(e.touches[0],e.touches[1]),r=wEl.getBoundingClientRect();
+      var curMidX=m.x-r.left,curMidY=m.y-r.top;
+      tx=curMidX-(startMidX-startTx)*factor;
+      ty=curMidY-(startMidY-startTy)*factor;
       scale=newScale;
       clampPan();apply();
     }
