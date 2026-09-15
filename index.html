@@ -328,14 +328,14 @@ input:focus{border-color:#3a7bd5;}
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="https://i.ibb.co/62r0PF3/image.jpg" alt="Мемы из фильмов и сериалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Мемы из фильмов и сериалов</div>
-          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button><button class="cat-play" id="kino-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button>
+          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button><button class="cat-play" id="kino-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
         </div>
       </div>
       <div class="cat-card" style="background:oklch(0.52 0.14 210)">
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="img/cover.jpg" alt="Мемы зуммеров и миллениалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Всё лучшее из двух поколений в одной колоде</div>
-          <button class="cat-play" id="combo-play-btn" onclick="sndClick();enterHome('combo')">ИГРАТЬ</button><button class="cat-play" id="combo-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button>
+          <button class="cat-play" id="combo-play-btn" onclick="sndClick();enterHome('combo')">ИГРАТЬ</button><button class="cat-play" id="combo-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
         </div>
       </div>
     </div>
@@ -365,6 +365,7 @@ input:focus{border-color:#3a7bd5;}
         <button class="btn btn-g btn-full" onclick="sndClick();findGame()">🔍 Найти игру</button>
       </div>
       <button class="btn btn-full" id="home-premium-btn" style="display:none;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button>
+      <button class="btn btn-full" id="home-gift-btn" style="display:none;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff;margin-top:8px" onclick="sndClick();openGiftModal()">🎁 Подарить премиум другу</button>
       <div class="divider">— или —</div>
       <label>Код комнаты</label>
       <input type="text" id="h-code" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;font-size:1.3rem;text-align:center" onkeydown="if(event.key==='Enter'){this.blur();}" onkeyup="if(event.key==='Enter'){this.blur();}">
@@ -519,10 +520,15 @@ function updateKinoButton(){
 }
 function updateHomeAccessUI(){
   var locked=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo')&&!__kinoPaid;
+  var isPremCat=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo');
   var actions=document.getElementById('home-access-actions');
   var premBtn=document.getElementById('home-premium-btn');
+  var giftBtn=document.getElementById('home-gift-btn');
   if(actions)actions.style.display=locked?'none':'';
   if(premBtn)premBtn.style.display=locked?'':'none';
+  // The gift button stays visible regardless of the viewer's own premium status -
+  // you can always buy premium as a gift for someone else.
+  if(giftBtn)giftBtn.style.display=isPremCat?'':'none';
 }
 function openPremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.add('open');}
 function closePremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.remove('open');}
@@ -544,11 +550,85 @@ function buyKinoAccess(){
       if(!d.link){alert('Не удалось создать счёт, попробуй позже.');return;}
       if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openInvoice){
         Telegram.WebApp.openInvoice(d.link,function(status){
-          if(status==='paid'){__kinoPaid=true;updateKinoButton();closePremiumModal();}
+          if(status==='paid'){__kinoPaid=true;updateKinoButton();closePremiumModal();fetchAndShowGiftLink('bonus');}
         });
       }
     })
     .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+}
+// --- Gifting: buy premium as a gift for a friend, and the free-week bonus
+// that comes bundled with every self-purchase. Telegram Mini Apps have no
+// "pick a contact" API, so the mechanism is the same one already used for
+// room invites: generate a one-time claim link and hand it to Telegram's own
+// share sheet - the buyer picks who to send it to right there.
+function openGiftModal(){var m=document.getElementById('gift-modal');if(m)m.classList.add('open');}
+function closeGiftModal(){var m=document.getElementById('gift-modal');if(m)m.classList.remove('open');}
+function closeGiftShareModal(){var m=document.getElementById('gift-share-modal');if(m)m.classList.remove('open');}
+function buyGiftPremium(){
+  var initData=tgInitData();
+  if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
+  fetch(KINO_BACKEND_URL+'/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.link){alert('Не удалось создать счёт, попробуй позже.');return;}
+      if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openInvoice){
+        Telegram.WebApp.openInvoice(d.link,function(status){
+          if(status==='paid'){closeGiftModal();fetchAndShowGiftLink('purchased');}
+        });
+      }
+    })
+    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+}
+function buyGiftPremiumCard(){
+  var initData=tgInitData();
+  if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
+  fetch(KINO_BACKEND_URL+'/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error==='card payment not configured yet'){alert('Оплата картой/СБП скоро появится, пока доступна оплата через Stars.');return;}
+      if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.');return;}
+      closeGiftModal();
+      alert('После оплаты бот пришлёт тебе в личку ссылку — перешли её другу.');
+      if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink){
+        Telegram.WebApp.openLink(d.url);
+      }else{
+        window.open(d.url,'_blank');
+      }
+    })
+    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+}
+// The claim token is minted server-side by the payment webhook, which can land
+// a moment after openInvoice's callback fires - poll briefly for it.
+function fetchAndShowGiftLink(kind,attempt){
+  attempt=attempt||0;
+  var initData=tgInitData();
+  if(!initData)return;
+  fetch(KINO_BACKEND_URL+'/api/gift/latest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,kind:kind})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.token){showGiftShareModal(d.token,kind);}
+      else if(attempt<6){setTimeout(function(){fetchAndShowGiftLink(kind,attempt+1);},800);}
+    })
+    .catch(function(){if(attempt<6)setTimeout(function(){fetchAndShowGiftLink(kind,attempt+1);},800);});
+}
+function showGiftShareModal(token,kind){
+  var link='https://t.me/meme_millennials_bot?start=gift_'+token;
+  var shareText=kind==='purchased'?'Дарю тебе премиум в «Мемах Миллениалов» на месяц! Открывай:':'Дарю тебе неделю премиума в «Мемах Миллениалов»! Открывай:';
+  var descEl=document.getElementById('gift-share-desc');
+  if(descEl)descEl.textContent=kind==='purchased'?'🎁 Премиум куплен в подарок! Отправь ссылку другу — он получит месяц премиума, как только откроет её.':'💎 Премиум подключен на месяц! Бонус: отправь другу ссылку ниже — он бесплатно получит неделю премиума.';
+  var btn=document.getElementById('gift-share-btn');
+  if(btn)btn.onclick=function(){
+    sndClick();
+    try{
+      if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openTelegramLink){
+        Telegram.WebApp.openTelegramLink('https://t.me/share/url?url='+encodeURIComponent(link)+'&text='+encodeURIComponent(shareText));
+        return;
+      }
+    }catch(e){}
+    try{navigator.clipboard.writeText(shareText+' '+link);alert('Ссылка скопирована!');}catch(e2){alert(link);}
+  };
+  var m=document.getElementById('gift-share-modal');
+  if(m)m.classList.add('open');
 }
 function buyKinoAccessCard(){
   var initData=tgInitData();
@@ -1127,12 +1207,36 @@ initTimerSettings();
 <div class="settings-modal" id="premium-modal">
   <div class="settings-box" style="max-width:340px;position:relative;overflow:hidden;background:linear-gradient(rgba(10,15,45,.6),rgba(10,15,45,.82)),url('img/imgpremium-bg.jpg.jpg') center/cover no-repeat;border-color:#FFD600;">
     <div style="font-family:'Russo One',sans-serif;font-size:1.3rem;font-weight:900;color:#fff;text-align:center;margin-bottom:8px;">Хайпанём немножечко? 🔥</div>
-    <div style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 18px;text-align:center;font-weight:600">
-      Один игрок в комнате подключает премиум — полный доступ получают все, кто играет по коду. Открывает все платные рубрики («Кино и сериалы», «Микс» и будущие) и убирает рекламу. Покупка навсегда, разовая.
+    <div style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 12px;text-align:center;font-weight:600">
+      Один игрок в комнате подключает премиум — полный доступ получают все, кто играет по коду. Открывает все платные рубрики («Кино и сериалы», «Микс» и будущие) и убирает рекламу. Премиум действует месяц.
+    </div>
+    <div style="font-size:.78rem;color:#96f7c1;line-height:1.5;margin:0 0 16px;text-align:center;font-weight:700;background:rgba(0,176,155,.18);border:1px solid rgba(150,247,193,.4);border-radius:10px;padding:8px 10px;">
+      🎁 Акция: сразу после покупки получишь ссылку, чтобы подарить другу неделю премиума бесплатно.
     </div>
     <button class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccess()">⭐ Оплатить Stars</button>
     <button class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyKinoAccessCard()">💳 Карта / СБП · 149 ₽</button>
     <button class="settings-btn settings-close" onclick="closePremiumModal()">✕ Закрыть</button>
+  </div>
+</div>
+
+<div class="settings-modal" id="gift-modal">
+  <div class="settings-box" style="max-width:340px;position:relative;overflow:hidden;background:linear-gradient(rgba(10,20,15,.62),rgba(10,20,15,.85)),url('img/imgpremium-bg.jpg.jpg') center/cover no-repeat;border-color:#96c93d;">
+    <div style="font-family:'Russo One',sans-serif;font-size:1.3rem;font-weight:900;color:#fff;text-align:center;margin-bottom:8px;">🎁 Подарить премиум другу</div>
+    <div style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 18px;text-align:center;font-weight:600">
+      Оплачиваешь ты — премиум на месяц достаётся тому, кому отправишь ссылку. Работает, даже если у тебя уже есть премиум или ты уже кому-то дарил.
+    </div>
+    <button class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyGiftPremium()">⭐ Оплатить Stars</button>
+    <button class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyGiftPremiumCard()">💳 Карта / СБП · 149 ₽</button>
+    <button class="settings-btn settings-close" onclick="closeGiftModal()">✕ Закрыть</button>
+  </div>
+</div>
+
+<div class="settings-modal" id="gift-share-modal">
+  <div class="settings-box" style="max-width:340px;position:relative;overflow:hidden;background:linear-gradient(rgba(10,20,15,.62),rgba(10,20,15,.85)),url('img/imgpremium-bg.jpg.jpg') center/cover no-repeat;border-color:#96c93d;">
+    <div style="font-family:'Russo One',sans-serif;font-size:1.3rem;font-weight:900;color:#fff;text-align:center;margin-bottom:8px;">🎉 Готово!</div>
+    <div id="gift-share-desc" style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 18px;text-align:center;font-weight:600"></div>
+    <button id="gift-share-btn" class="settings-btn" style="background:#96c93d;color:#0a1a0f">📤 Отправить другу</button>
+    <button class="settings-btn settings-close" onclick="closeGiftShareModal()">✕ Позже</button>
   </div>
 </div>
 </body>

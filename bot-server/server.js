@@ -96,12 +96,24 @@ function validateInitData(initData) {
   }
 }
 
+// --- Premium duration ---
+// Premium is time-limited (used to be a lifetime grant). Records written before
+// this change have no paidUntil field at all - those are grandfathered in as
+// still-active rather than retroactively cutting off people who already paid.
+const PREMIUM_DAYS = 30;
+const GIFT_BONUS_DAYS = 7; // free week bundled with every self-purchase, for a friend
+const GIFT_PURCHASED_DAYS = 30; // full month when someone buys premium as a gift
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 // --- Firebase Realtime Database helpers ---
 // Data lives under /paidUsers/<telegramId>, separate from the game's own multiplayer data.
 async function isPaid(telegramId) {
   try {
     const snap = await db.ref('paidUsers/' + telegramId).get();
-    return snap.exists();
+    if (!snap.exists()) return false;
+    const v = snap.val() || {};
+    if (typeof v.paidUntil !== 'number') return true; // legacy lifetime grant
+    return v.paidUntil > Date.now();
   } catch (e) {
     console.error('isPaid error:', e.message);
     return false;
@@ -118,16 +130,96 @@ async function getPaidRecord(telegramId) {
   }
 }
 
-async function markPaid(telegramId, chargeId) {
+// Grants `days` of premium starting now (self-purchase). Stars/card purchases
+// always start a fresh PREMIUM_DAYS window from the moment of payment.
+async function markPaid(telegramId, chargeId, days) {
+  days = days || PREMIUM_DAYS;
   try {
     await db.ref('paidUsers/' + telegramId).set({
       paidAt: admin.database.ServerValue.TIMESTAMP,
+      paidUntil: Date.now() + days * DAY_MS,
       chargeId: chargeId || null,
     });
     await db.ref('pendingPayments/' + telegramId).remove().catch(() => {});
   } catch (e) {
     console.error('markPaid error:', e.message);
   }
+}
+
+// Random URL-safe gift token id.
+function genGiftToken() {
+  return crypto.randomBytes(6).toString('hex');
+}
+
+// Creates a claimable gift record. kind: 'bonus' (free week bundled with a
+// self-purchase) or 'purchased' (someone paid specifically to gift it).
+async function createGiftToken(fromUid, kind, days) {
+  const token = genGiftToken();
+  const now = Date.now();
+  await db.ref('giftTokens/' + token).set({
+    fromUid: String(fromUid),
+    kind,
+    days,
+    createdAt: now,
+    expiresAt: now + PREMIUM_DAYS * DAY_MS, // unclaimed link goes stale after a month
+    claimedBy: null,
+    claimedAt: null,
+  });
+  return token;
+}
+
+// Atomically claims a gift token and extends the recipient's premium.
+// Stacks on top of any still-active premium instead of overwriting it.
+async function claimGiftToken(token, toUid) {
+  toUid = String(toUid);
+  const ref = db.ref('giftTokens/' + token);
+  let aborted = null;
+  const result = await ref.transaction((cur) => {
+    if (!cur) { aborted = 'not_found'; return; }
+    if (cur.claimedBy) { aborted = 'claimed'; return; }
+    if (cur.expiresAt && cur.expiresAt < Date.now()) { aborted = 'expired'; return; }
+    if (String(cur.fromUid) === toUid) { aborted = 'self'; return; }
+    cur.claimedBy = toUid;
+    cur.claimedAt = Date.now();
+    return cur;
+  });
+  if (!result.committed) return { ok: false, reason: aborted || 'claimed' };
+  const data = result.snapshot.val();
+  const days = data.days || GIFT_BONUS_DAYS;
+  try {
+    const prevSnap = await db.ref('paidUsers/' + toUid).get();
+    const prev = prevSnap.exists() ? prevSnap.val() : null;
+    const stillActive = prev && typeof prev.paidUntil === 'number' && prev.paidUntil > Date.now();
+    const base = stillActive ? prev.paidUntil : Date.now();
+    await db.ref('paidUsers/' + toUid).set({
+      paidAt: (prev && prev.paidAt) || admin.database.ServerValue.TIMESTAMP,
+      paidUntil: base + days * DAY_MS,
+      chargeId: (prev && prev.chargeId) || null,
+      giftFrom: data.fromUid,
+    });
+  } catch (e) {
+    console.error('claimGiftToken grant error:', e.message);
+    return { ok: false, reason: 'error' };
+  }
+  return { ok: true, fromUid: data.fromUid, days };
+}
+
+function giftLink(token) {
+  return `https://t.me/meme_millennials_bot?start=gift_${token}`;
+}
+function purchaseThanksText(bonusToken) {
+  return (
+    'Спасибо за покупку! Премиум активен на месяц 🎉 Все платные рубрики открыты, рекламы нет.\n\n' +
+    '🎁 Бонус: подари неделю премиума другу — перешли ему эту ссылку, и она сама всё сделает, как только он её откроет:\n' +
+    giftLink(bonusToken)
+  );
+}
+function giftReadyText(token) {
+  return (
+    '🎁 Подарок готов! Перешли эту ссылку другу — как только он её откроет, у него на месяц появится премиум:\n' +
+    giftLink(token) +
+    '\n\nСсылка одноразовая, сработает только у того, кто откроет её первым.'
+  );
 }
 
 // Track "a payment was started but not yet confirmed" so the support bot can
@@ -247,24 +339,63 @@ app.post('/api/check-access', async (req, res) => {
   res.json({ paid });
 });
 
+// --- API: fetch the most recent unclaimed gift token this user created ---
+// The Mini App polls this right after a successful purchase (self or gift) to
+// build the "share this with a friend" link - the token itself is minted
+// server-side by the payment webhook, this just hands it to the client.
+app.post('/api/gift/latest', async (req, res) => {
+  const user = validateInitData(req.body.initData);
+  if (!user) return res.status(401).json({ error: 'invalid initData' });
+  const kind = req.body.kind === 'purchased' ? 'purchased' : 'bonus';
+  try {
+    const snap = await db
+      .ref('giftTokens')
+      .orderByChild('fromUid')
+      .equalTo(String(user.id))
+      .limitToLast(20)
+      .get();
+    if (!snap.exists()) return res.json({ token: null });
+    let best = null;
+    snap.forEach((ch) => {
+      const v = ch.val();
+      if (v.kind === kind && !v.claimedBy && (!best || v.createdAt > best.createdAt)) {
+        best = { token: ch.key, createdAt: v.createdAt };
+      }
+    });
+    res.json({ token: best ? best.token : null });
+  } catch (e) {
+    console.error('gift/latest error:', e.message);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 // --- API: create invoice link for Stars purchase ---
+// Pass { gift: true } to buy premium as a gift for someone else instead of for
+// yourself - that skips the "already paid" short-circuit (you can always buy a
+// gift, no matter your own status) and tags the invoice so the webhook knows to
+// mint a claimable gift link instead of marking the buyer paid.
 app.post('/api/create-invoice', async (req, res) => {
   const user = validateInitData(req.body.initData);
   if (!user) return res.status(401).json({ error: 'invalid initData' });
+  const isGift = !!req.body.gift;
 
-  const alreadyPaid = await isPaid(user.id);
-  if (alreadyPaid) return res.json({ alreadyPaid: true });
+  if (!isGift) {
+    const alreadyPaid = await isPaid(user.id);
+    if (alreadyPaid) return res.json({ alreadyPaid: true });
+  }
 
   const result = await tgCall('createInvoiceLink', {
-    title: 'Полный доступ к игре',
-    description: 'Полный доступ ко всем платным рубрикам и без рекламы. Оплачивает один игрок в комнате — играют все по коду. Навсегда, разовая покупка.',
-    payload: `full_access_${user.id}_${Date.now()}`,
+    title: isGift ? 'Премиум в подарок другу' : 'Премиум на месяц',
+    description: isGift
+      ? 'Оплачиваешь ты — премиум на месяц достанется другу, которому отправишь ссылку после оплаты. Открывает все платные рубрики и убирает рекламу.'
+      : 'Полный доступ ко всем платным рубрикам и без рекламы на месяц. Плюс сразу после покупки — ссылка, чтобы подарить другу неделю премиума бесплатно.',
+    payload: `${isGift ? 'gift_access' : 'full_access'}_${user.id}_${Date.now()}`,
     currency: 'XTR',
-    prices: [{ label: 'Полный доступ', amount: STARS_PRICE }],
+    prices: [{ label: isGift ? 'Премиум в подарок' : 'Премиум на месяц', amount: STARS_PRICE }],
   });
 
   if (!result.ok) return res.status(502).json({ error: 'telegram api error' });
-  markPending(user.id, 'stars').catch(() => {});
+  if (!isGift) markPending(user.id, 'stars').catch(() => {});
   res.json({ link: result.result });
 });
 
@@ -273,17 +404,22 @@ app.post('/api/create-tbank-payment', async (req, res) => {
   if (!TBANK_ENABLED) return res.status(503).json({ error: 'card payment not configured yet' });
   const user = validateInitData(req.body.initData);
   if (!user) return res.status(401).json({ error: 'invalid initData' });
+  const isGift = !!req.body.gift;
 
-  const alreadyPaid = await isPaid(user.id);
-  if (alreadyPaid) return res.json({ alreadyPaid: true });
+  if (!isGift) {
+    const alreadyPaid = await isPaid(user.id);
+    if (alreadyPaid) return res.json({ alreadyPaid: true });
+  }
 
-  const orderId = `kino-${user.id}-${Date.now()}`;
+  const orderId = `kino-${isGift ? 'gift-' : ''}${user.id}-${Date.now()}`;
   let result;
   try {
     result = await tbankCall('Init', {
       Amount: TBANK_PRICE_RUB * 100, // kopecks
       OrderId: orderId,
-      Description: 'Полный доступ: все рубрики, без рекламы, один платит — играют все',
+      Description: isGift
+        ? 'Премиум в подарок другу на месяц — оплачивает даритель'
+        : 'Премиум на месяц: все рубрики, без рекламы, плюс неделя в подарок другу',
       NotificationURL: `${PUBLIC_URL}/tbank-notification`,
       SuccessURL: `${PUBLIC_URL}/tbank-success`,
       FailURL: `${PUBLIC_URL}/tbank-fail`,
@@ -297,7 +433,7 @@ app.post('/api/create-tbank-payment', async (req, res) => {
     console.error('T-Bank Init failed:', JSON.stringify(result));
     return res.status(502).json({ error: 'tbank api error' });
   }
-  markPending(user.id, 'card').catch(() => {});
+  if (!isGift) markPending(user.id, 'card').catch(() => {});
   res.json({ url: result.PaymentURL });
 });
 
@@ -316,14 +452,26 @@ app.post('/tbank-notification', async (req, res) => {
     }
 
     if (body.Status === 'CONFIRMED' && typeof body.OrderId === 'string') {
-      const m = body.OrderId.match(/^kino-(\d+)-/);
-      if (m) {
-        const telegramId = m[1];
-        await markPaid(telegramId, body.PaymentId ? String(body.PaymentId) : null);
+      const paymentId = body.PaymentId ? String(body.PaymentId) : null;
+      const giftMatch = body.OrderId.match(/^kino-gift-(\d+)-/);
+      const selfMatch = giftMatch ? null : body.OrderId.match(/^kino-(\d+)-/);
+      if (giftMatch) {
+        const buyerId = giftMatch[1];
+        const token = await createGiftToken(buyerId, 'purchased', GIFT_PURCHASED_DAYS);
+        try {
+          await tgCall('sendMessage', {
+            chat_id: buyerId,
+            text: giftReadyText(token),
+          });
+        } catch (e) { /* best effort */ }
+      } else if (selfMatch) {
+        const telegramId = selfMatch[1];
+        await markPaid(telegramId, paymentId);
+        const bonusToken = await createGiftToken(telegramId, 'bonus', GIFT_BONUS_DAYS);
         try {
           await tgCall('sendMessage', {
             chat_id: telegramId,
-            text: 'Спасибо за покупку! Полный доступ открыт 🎉 Возвращайся в игру — все платные рубрики уже разблокированы.',
+            text: purchaseThanksText(bonusToken),
           });
         } catch (e) { /* best effort */ }
       }
@@ -361,7 +509,8 @@ const FAQ = {
     '🧩 Рубрики и полный доступ\n\n' +
     'Бесплатно: «Мемы миллениалов» и «Мемы зумеров».\n\n' +
     'Полный доступ открывает «Кино и сериалы», «Микс из всех мемов» и все будущие рубрики, а также убирает рекламу.\n\n' +
-    '👥 Платит один игрок в комнате — полный доступ получают все, кто зашёл по коду. Покупка навсегда, разовая.',
+    '👥 Платит один игрок в комнате — доступ получают все, кто зашёл по коду. Премиум действует месяц.\n\n' +
+    '🎁 При покупке сразу получаешь ссылку, чтобы подарить другу неделю премиума бесплатно. Плюс можно в любой момент купить премиум в подарок другому игроку.',
   pay:
     '💳 Как оплатить\n\n' +
     'Открой игру → зайди в платную рубрику (с замком) → «Подключить премиум» → выбери способ:\n' +
@@ -413,8 +562,18 @@ function fmtAgo(ms) {
 async function paymentStatusText(tgId) {
   const [paidRec, pending] = await Promise.all([getPaidRecord(tgId), getPending(tgId)]);
   if (paidRec) {
-    const d = paidRec.paidAt ? ' (' + new Date(paidRec.paidAt).toISOString().slice(0, 10) + ')' : '';
-    return `🧾 Полный доступ у тебя активен ✅${d}\n\nЕсли в игре всё ещё замок — полностью закрой и снова открой игру: доступ подтянется.`;
+    if (typeof paidRec.paidUntil === 'number') {
+      if (paidRec.paidUntil <= Date.now()) {
+        return (
+          '🧾 Твой премиум закончился.\n\n' +
+          'Чтобы продлить — открой игру, зайди в платную рубрику и нажми «Подключить премиум».'
+        );
+      }
+      const daysLeft = Math.max(1, Math.ceil((paidRec.paidUntil - Date.now()) / DAY_MS));
+      const until = new Date(paidRec.paidUntil).toISOString().slice(0, 10);
+      return `🧾 Премиум активен ✅ ещё ${daysLeft} дн. (до ${until})\n\nЕсли в игре всё ещё замок — полностью закрой и снова открой игру: доступ подтянется.`;
+    }
+    return '🧾 Полный доступ у тебя активен ✅ (бессрочно, куплен до перехода на помесячную оплату)\n\nЕсли в игре всё ещё замок — полностью закрой и снова открой игру: доступ подтянется.';
   }
   if (pending && pending.startedAt) {
     const method = pending.method === 'card' ? 'картой/СБП' : 'через Telegram Stars';
@@ -533,6 +692,33 @@ async function handleTextMessage(msg) {
   if (raw === '/start' || raw === '/help' || raw === '/menu' || raw.startsWith('/start ')) {
     if (raw.startsWith('/start ')) {
       const sp = raw.slice(7).trim();
+      if (sp.indexOf('gift_') === 0) {
+        _awaiting.delete(from.id);
+        const token = sp.slice(5);
+        const result = await claimGiftToken(token, from.id);
+        if (result.ok) {
+          await tgCall('sendMessage', {
+            chat_id: chatId,
+            text:
+              `🎉 Тебе подарили ${result.days >= 30 ? 'месяц' : 'неделю'} премиума в «Мемах Миллениалов»! ` +
+              'Все платные рубрики уже открыты, реклама убрана.',
+            reply_markup: { inline_keyboard: [[{ text: '🎮 Открыть игру', url: 'https://t.me/meme_millennials_bot/meme_game' }]] },
+          });
+          tgCall('sendMessage', {
+            chat_id: result.fromUid,
+            text: '✅ Твой подарок принят другом — премиум ему уже открыт. Спасибо, что делишься игрой!',
+          }).catch(() => {});
+        } else {
+          const why =
+            result.reason === 'self'
+              ? 'Нельзя подарить премиум самому себе 🙂'
+              : result.reason === 'expired'
+              ? 'Эта ссылка-подарок устарела (прошёл месяц) 😕'
+              : 'Эта ссылка-подарок уже использована или недействительна 😕';
+          await tgCall('sendMessage', { chat_id: chatId, text: why });
+        }
+        return sendMenu(chatId, WELCOME);
+      }
       if (sp.indexOf('s_') === 0) trackSource(sp.slice(2), from.id).catch(() => {});
     }
     _awaiting.delete(from.id);
@@ -577,11 +763,15 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
     if (update.message && update.message.successful_payment) {
       const msg = update.message;
       const sp = msg.successful_payment;
-      await markPaid(msg.from.id, sp.telegram_payment_charge_id);
-      await tgCall('sendMessage', {
-        chat_id: msg.chat.id,
-        text: 'Спасибо за покупку! Полный доступ открыт 🎉 Возвращайся в игру — все платные рубрики уже разблокированы.',
-      });
+      const payload = String(sp.invoice_payload || '');
+      if (payload.startsWith('gift_access_')) {
+        const token = await createGiftToken(msg.from.id, 'purchased', GIFT_PURCHASED_DAYS);
+        await tgCall('sendMessage', { chat_id: msg.chat.id, text: giftReadyText(token) });
+      } else {
+        await markPaid(msg.from.id, sp.telegram_payment_charge_id);
+        const bonusToken = await createGiftToken(msg.from.id, 'bonus', GIFT_BONUS_DAYS);
+        await tgCall('sendMessage', { chat_id: msg.chat.id, text: purchaseThanksText(bonusToken) });
+      }
       return;
     }
 
@@ -612,7 +802,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-const VERSION = 'support-bot 2026-09-08d (review button)';
+const VERSION = 'support-bot 2026-09-15 (monthly premium + gifting)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT} (${VERSION})`));
