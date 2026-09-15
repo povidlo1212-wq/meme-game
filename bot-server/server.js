@@ -23,6 +23,17 @@ const TBANK_PASSWORD = process.env.TBANK_PASSWORD || '';
 const TBANK_PRICE_RUB = parseInt(process.env.TBANK_PRICE_RUB || '149', 10);
 const TBANK_ENABLED = !!(TBANK_TERMINAL_KEY && TBANK_PASSWORD);
 const PUBLIC_URL = process.env.PUBLIC_URL || ''; // e.g. https://meme-game-bot.onrender.com, needed for NotificationURL/SuccessURL
+// 54-FZ requires a fiscal receipt on every card/SBP charge. Telegram never
+// gives us the payer's email/phone, so the receipt goes to one fixed address -
+// set this to whatever email your kassa/ОФД setup should send receipts to.
+const TBANK_RECEIPT_EMAIL = process.env.TBANK_RECEIPT_EMAIL || '';
+// Tax system code from your T-Bank/ФНС registration, e.g. usn_income,
+// usn_income_outcome, osn, envd, esn, patent. usn_income is the common default
+// for a self-employed/ИП seller on "доходы" - override if yours differs.
+const TBANK_TAXATION = process.env.TBANK_TAXATION || 'usn_income';
+if (TBANK_ENABLED && !TBANK_RECEIPT_EMAIL) {
+  console.error('TBANK_ENABLED but TBANK_RECEIPT_EMAIL is not set - T-Bank Init will fail with "expected.receipt" until it is.');
+}
 
 // Support bot — optional: your own Telegram chat id to receive a copy of every
 // support message / bug report players send. Get it from @userinfobot.
@@ -412,6 +423,7 @@ app.post('/api/create-tbank-payment', async (req, res) => {
   }
 
   const orderId = `kino-${isGift ? 'gift-' : ''}${user.id}-${Date.now()}`;
+  const itemName = isGift ? 'Премиум в подарок (1 месяц)' : 'Премиум на месяц';
   let result;
   try {
     result = await tbankCall('Init', {
@@ -423,6 +435,23 @@ app.post('/api/create-tbank-payment', async (req, res) => {
       NotificationURL: `${PUBLIC_URL}/tbank-notification`,
       SuccessURL: `${PUBLIC_URL}/tbank-success`,
       FailURL: `${PUBLIC_URL}/tbank-fail`,
+      // Required by 54-FZ for every card/SBP charge - without it T-Bank rejects
+      // the Init call outright (ErrorCode 309, expected.receipt).
+      Receipt: {
+        Email: TBANK_RECEIPT_EMAIL || undefined,
+        Taxation: TBANK_TAXATION,
+        Items: [
+          {
+            Name: itemName,
+            Price: TBANK_PRICE_RUB * 100,
+            Quantity: 1,
+            Amount: TBANK_PRICE_RUB * 100,
+            Tax: 'none',
+            PaymentMethod: 'full_payment',
+            PaymentObject: 'service',
+          },
+        ],
+      },
     });
   } catch (e) {
     console.error('T-Bank Init request failed:', e);
