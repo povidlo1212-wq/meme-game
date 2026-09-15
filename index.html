@@ -26,6 +26,7 @@ body{font-family:'Nunito',sans-serif;min-height:100vh;overflow:hidden;background
 #s-home{position:relative;overflow:hidden;background:linear-gradient(160deg,#3a7bd5 0%,#1a4a9e 40%,#0d2254 100%);}
 .float-meme{position:absolute;font-size:clamp(36px,7vw,80px);opacity:.15;animation:floatUp 9s ease-in-out infinite;pointer-events:none;user-select:none;}
 @keyframes floatUp{0%,100%{transform:translateY(0) rotate(-6deg);}50%{transform:translateY(-22px) rotate(6deg);}}
+@keyframes mmConfettiFall{0%{transform:translate(0,0) rotate(0deg);opacity:1;}100%{transform:translate(var(--mmdrift),115vh) rotate(540deg);opacity:0;}}
 .home-content{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;padding:10px 16px;width:100%;gap:8px;}
 .home-cover-box{width:min(110px,28vw);aspect-ratio:430/640;border-radius:16px;border:5px solid #FFD600;box-shadow:0 10px 36px rgba(0,0,0,.6);overflow:hidden;background:#1a3a9e;}
 .home-cover-box img{width:100%;height:100%;object-fit:cover;display:block;}
@@ -328,14 +329,14 @@ input:focus{border-color:#3a7bd5;}
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="https://i.ibb.co/62r0PF3/image.jpg" alt="Мемы из фильмов и сериалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Мемы из фильмов и сериалов</div>
-          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button><button class="cat-play" id="kino-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
+          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button><button class="cat-play" id="kino-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button><div id="kino-premium-caption" style="display:none;color:#fff;font-size:.68rem;font-weight:700;text-align:center;margin-top:4px;">🎁 При покупке — неделя премиума в подарок другу</div><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
         </div>
       </div>
       <div class="cat-card" style="background:oklch(0.52 0.14 210)">
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="img/cover.jpg" alt="Мемы зуммеров и миллениалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Всё лучшее из двух поколений в одной колоде</div>
-          <button class="cat-play" id="combo-play-btn" onclick="sndClick();enterHome('combo')">ИГРАТЬ</button><button class="cat-play" id="combo-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
+          <button class="cat-play" id="combo-play-btn" onclick="sndClick();enterHome('combo')">ИГРАТЬ</button><button class="cat-play" id="combo-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button><div id="combo-premium-caption" style="display:none;color:#fff;font-size:.68rem;font-weight:700;text-align:center;margin-top:4px;">🎁 При покупке — неделя премиума в подарок другу</div><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
         </div>
       </div>
     </div>
@@ -365,6 +366,7 @@ input:focus{border-color:#3a7bd5;}
         <button class="btn btn-g btn-full" onclick="sndClick();findGame()">🔍 Найти игру</button>
       </div>
       <button class="btn btn-full" id="home-premium-btn" style="display:none;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button>
+      <div id="home-premium-caption" style="display:none;color:#fff;font-size:.7rem;font-weight:700;text-align:center;margin-top:5px;">🎁 При покупке — неделя премиума в подарок другу</div>
       <button class="btn btn-full" id="home-gift-btn" style="display:none;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff;margin-top:8px" onclick="sndClick();openGiftModal()">🎁 Подарить премиум другу</button>
       <div class="divider">— или —</div>
       <label>Код комнаты</label>
@@ -512,10 +514,10 @@ input:focus{border-color:#3a7bd5;}
 var KINO_BACKEND_URL='https://meme-game-bot.onrender.com';
 var __kinoPaid=false;
 function tgInitData(){try{return (window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||'';}catch(e){return '';}}
-function updatePremiumBtn(id){var b=document.getElementById(id);if(b)b.style.display=__kinoPaid?'none':'';}
+function updatePremiumBtn(id,captionId){var b=document.getElementById(id);if(b)b.style.display=__kinoPaid?'none':'';if(captionId){var c=document.getElementById(captionId);if(c)c.style.display=__kinoPaid?'none':'';}}
 function updateKinoButton(){
-  updatePremiumBtn('kino-premium-btn');
-  updatePremiumBtn('combo-premium-btn');
+  updatePremiumBtn('kino-premium-btn','kino-premium-caption');
+  updatePremiumBtn('combo-premium-btn','combo-premium-caption');
   updateHomeAccessUI();
 }
 function updateHomeAccessUI(){
@@ -523,9 +525,11 @@ function updateHomeAccessUI(){
   var isPremCat=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo');
   var actions=document.getElementById('home-access-actions');
   var premBtn=document.getElementById('home-premium-btn');
+  var premCaption=document.getElementById('home-premium-caption');
   var giftBtn=document.getElementById('home-gift-btn');
   if(actions)actions.style.display=locked?'none':'';
   if(premBtn)premBtn.style.display=locked?'':'none';
+  if(premCaption)premCaption.style.display=locked?'':'none';
   // The gift button stays visible regardless of the viewer's own premium status -
   // you can always buy premium as a gift for someone else.
   if(giftBtn)giftBtn.style.display=isPremCat?'':'none';
@@ -537,8 +541,25 @@ function checkKinoAccess(){
   if(!initData){updateKinoButton();return;}
   fetch(KINO_BACKEND_URL+'/api/check-access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
     .then(function(r){return r.json();})
-    .then(function(d){__kinoPaid=!!d.paid;updateKinoButton();})
+    .then(function(d){__kinoPaid=!!d.paid;updateKinoButton();checkPendingCardPurchase();})
     .catch(function(){updateKinoButton();});
+}
+// Card/SBP payment leaves the Mini App entirely (external Tinkoff page), so
+// there's no in-app callback like Stars has. Mark what we're waiting for
+// before navigating away, then when the app becomes visible again and
+// checkKinoAccess() has a fresh answer, pick the celebration back up here.
+function markPendingCardPurchase(kind){try{localStorage.setItem('mm_pending_card_purchase',JSON.stringify({kind:kind,at:Date.now()}));}catch(e){}}
+function checkPendingCardPurchase(){
+  var raw;try{raw=localStorage.getItem('mm_pending_card_purchase');}catch(e){return;}
+  if(!raw)return;
+  var data;try{data=JSON.parse(raw);}catch(e){data=null;}
+  try{localStorage.removeItem('mm_pending_card_purchase');}catch(e){}
+  if(!data||Date.now()-data.at>20*60*1000)return; // stale (>20 min) - drop it silently
+  if(data.kind==='bonus'){
+    if(__kinoPaid)fetchAndShowGiftLink('bonus');
+  }else if(data.kind==='purchased'){
+    fetchAndShowGiftLink('purchased');
+  }
 }
 function buyKinoAccess(){
   var initData=tgInitData();
@@ -588,7 +609,7 @@ function buyGiftPremiumCard(){
       if(d.error==='card payment not configured yet'){alert('Оплата картой/СБП скоро появится, пока доступна оплата через Stars.');return;}
       if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.'+(d.detail?('\n\n'+d.detail):''));return;}
       closeGiftModal();
-      alert('После оплаты бот пришлёт тебе в личку ссылку — перешли её другу.');
+      markPendingCardPurchase('purchased');
       if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink){
         Telegram.WebApp.openLink(d.url);
       }else{
@@ -614,8 +635,10 @@ function fetchAndShowGiftLink(kind,attempt){
 function showGiftShareModal(token,kind){
   var link='https://t.me/meme_millennials_bot?start=gift_'+token;
   var shareText=kind==='purchased'?'Дарю тебе премиум в «Мемах Миллениалов» на месяц! Открывай:':'Дарю тебе неделю премиума в «Мемах Миллениалов»! Открывай:';
+  var titleEl=document.getElementById('gift-share-title');
+  if(titleEl)titleEl.textContent=kind==='purchased'?'🎉 Оплата прошла успешно!':'🎉 Оплата прошла успешно!';
   var descEl=document.getElementById('gift-share-desc');
-  if(descEl)descEl.textContent=kind==='purchased'?'🎁 Премиум куплен в подарок! Отправь ссылку другу — он получит месяц премиума, как только откроет её.':'💎 Премиум подключен на месяц! Бонус: отправь другу ссылку ниже — он бесплатно получит неделю премиума.';
+  if(descEl)descEl.innerHTML=(kind==='purchased'?'Премиум куплен в подарок на месяц.':'Премиум подключён на месяц.')+'<br><br>🎁 Ниже прикреплена ссылка для друга, по которой он может получить '+(kind==='purchased'?'месяц':'неделю')+' премиума бесплатно.';
   var btn=document.getElementById('gift-share-btn');
   if(btn)btn.onclick=function(){
     sndClick();
@@ -629,6 +652,34 @@ function showGiftShareModal(token,kind){
   };
   var m=document.getElementById('gift-share-modal');
   if(m)m.classList.add('open');
+  snd('startup',1);
+  celebrateConfetti();
+}
+// One-shot yellow confetti burst from the top of the screen.
+function celebrateConfetti(){
+  try{
+    var old=document.getElementById('mm-confetti');
+    if(old&&old.parentNode)old.parentNode.removeChild(old);
+    var host=document.createElement('div');
+    host.id='mm-confetti';
+    host.style.cssText='position:fixed;inset:0;z-index:1000000;pointer-events:none;overflow:hidden;';
+    var colors=['#FFD600','#FFE066','#FFC400','#FFF3B0'];
+    var n=32;
+    for(var i=0;i<n;i++){
+      var p=document.createElement('div');
+      var size=6+Math.random()*8;
+      var left=Math.random()*100;
+      var delay=(Math.random()*0.3).toFixed(2);
+      var dur=(1.5+Math.random()*1.1).toFixed(2);
+      var rot=(Math.random()*360)|0;
+      var drift=Math.round(Math.random()*160-80);
+      p.style.cssText='position:absolute;top:-6%;left:'+left+'%;width:'+size+'px;height:'+(size*0.55)+'px;background:'+colors[i%colors.length]+';opacity:.95;border-radius:2px;transform:rotate('+rot+'deg);animation:mmConfettiFall '+dur+'s cubic-bezier(.25,.46,.45,.94) '+delay+'s forwards;';
+      p.style.setProperty('--mmdrift',drift+'px');
+      host.appendChild(p);
+    }
+    document.body.appendChild(host);
+    setTimeout(function(){if(host.parentNode)host.parentNode.removeChild(host);},3000);
+  }catch(e){}
 }
 function buyKinoAccessCard(){
   var initData=tgInitData();
@@ -639,6 +690,8 @@ function buyKinoAccessCard(){
       if(d.alreadyPaid){__kinoPaid=true;updateKinoButton();closePremiumModal();return;}
       if(d.error==='card payment not configured yet'){alert('Оплата картой/СБП скоро появится, пока доступна оплата через Stars.');return;}
       if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.'+(d.detail?('\n\n'+d.detail):''));return;}
+      closePremiumModal();
+      markPendingCardPurchase('bonus');
       if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink){
         Telegram.WebApp.openLink(d.url);
       }else{
@@ -1211,7 +1264,7 @@ initTimerSettings();
       Один игрок в комнате подключает премиум — полный доступ получают все, кто играет по коду. Открывает все платные рубрики («Кино и сериалы», «Микс» и будущие) и убирает рекламу. Премиум действует месяц.
     </div>
     <div style="font-size:.78rem;color:#96f7c1;line-height:1.5;margin:0 0 16px;text-align:center;font-weight:700;background:rgba(0,176,155,.18);border:1px solid rgba(150,247,193,.4);border-radius:10px;padding:8px 10px;">
-      🎁 Акция: сразу после покупки получишь ссылку, чтобы подарить другу неделю премиума бесплатно.
+      🎁 Акция: сразу после оплаты в игре появится ссылка, чтобы подарить другу неделю премиума бесплатно. Она же продублируется от бота в личку.
     </div>
     <button class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccess()">⭐ Оплатить Stars</button>
     <button class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyKinoAccessCard()">💳 Карта / СБП · 149 ₽</button>
@@ -1233,7 +1286,8 @@ initTimerSettings();
 
 <div class="settings-modal" id="gift-share-modal">
   <div class="settings-box" style="max-width:340px;position:relative;overflow:hidden;background:linear-gradient(rgba(10,20,15,.62),rgba(10,20,15,.85)),url('img/imgpremium-bg.jpg.jpg') center/cover no-repeat;border-color:#96c93d;">
-    <div style="font-family:'Russo One',sans-serif;font-size:1.3rem;font-weight:900;color:#fff;text-align:center;margin-bottom:8px;">🎉 Готово!</div>
+    <img id="gift-share-img" src="img/stonks.jpg" alt="" style="display:none;width:120px;height:120px;object-fit:contain;margin:0 auto 10px;display:block;border-radius:12px;" onerror="this.style.display='none'">
+    <div id="gift-share-title" style="font-family:'Russo One',sans-serif;font-size:1.3rem;font-weight:900;color:#fff;text-align:center;margin-bottom:8px;">🎉 Оплата прошла успешно!</div>
     <div id="gift-share-desc" style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 18px;text-align:center;font-weight:600"></div>
     <button id="gift-share-btn" class="settings-btn" style="background:#96c93d;color:#0a1a0f">📤 Отправить другу</button>
     <button class="settings-btn settings-close" onclick="closeGiftShareModal()">✕ Позже</button>

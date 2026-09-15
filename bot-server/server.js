@@ -176,6 +176,7 @@ async function createGiftToken(fromUid, kind, days) {
     claimedBy: null,
     claimedAt: null,
   });
+  console.log('createGiftToken', token, 'from', fromUid, 'kind=' + kind, 'days=' + days);
   return token;
 }
 
@@ -185,7 +186,9 @@ async function claimGiftToken(token, toUid) {
   toUid = String(toUid);
   const ref = db.ref('giftTokens/' + token);
   let aborted = null;
+  let sawBefore = null;
   const result = await ref.transaction((cur) => {
+    sawBefore = cur; // last state the callback actually saw (may run more than once on retry)
     if (!cur) { aborted = 'not_found'; return; }
     if (cur.claimedBy) { aborted = 'claimed'; return; }
     if (cur.expiresAt && cur.expiresAt < Date.now()) { aborted = 'expired'; return; }
@@ -194,6 +197,11 @@ async function claimGiftToken(token, toUid) {
     cur.claimedAt = Date.now();
     return cur;
   });
+  console.log(
+    'claimGiftToken', token, 'by', toUid,
+    'committed=' + result.committed, 'reason=' + aborted,
+    'sawBefore=' + JSON.stringify(sawBefore),
+  );
   if (!result.committed) return { ok: false, reason: aborted || 'claimed' };
   const data = result.snapshot.val();
   const days = data.days || GIFT_BONUS_DAYS;
@@ -213,6 +221,19 @@ async function claimGiftToken(token, toUid) {
     return { ok: false, reason: 'error' };
   }
   return { ok: true, fromUid: data.fromUid, days };
+}
+
+// Payment gateways (Tinkoff, Telegram) can and do redeliver the same
+// confirmation more than once. Without this, a redelivered notification would
+// mint a second gift token and reset paidUntil again for the same purchase -
+// claim the order id atomically before acting on it so a retry is a no-op.
+async function claimPaymentOnce(key) {
+  const ref = db.ref('processedPayments/' + key);
+  const result = await ref.transaction((cur) => {
+    if (cur) return; // already claimed -> abort
+    return { at: Date.now() };
+  });
+  return result.committed;
 }
 
 function giftLink(token) {
@@ -484,6 +505,11 @@ app.post('/tbank-notification', async (req, res) => {
     }
 
     if (body.Status === 'CONFIRMED' && typeof body.OrderId === 'string') {
+      const firstTime = await claimPaymentOnce('tbank_' + body.OrderId);
+      if (!firstTime) {
+        console.log('tbank-notification: duplicate delivery for', body.OrderId, '- skipping');
+        return res.send('OK');
+      }
       const paymentId = body.PaymentId ? String(body.PaymentId) : null;
       const giftMatch = body.OrderId.match(/^kino-gift-(\d+)-/);
       const selfMatch = giftMatch ? null : body.OrderId.match(/^kino-(\d+)-/);
@@ -795,6 +821,11 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
     if (update.message && update.message.successful_payment) {
       const msg = update.message;
       const sp = msg.successful_payment;
+      const firstTime = await claimPaymentOnce('stars_' + sp.telegram_payment_charge_id);
+      if (!firstTime) {
+        console.log('successful_payment: duplicate delivery for', sp.telegram_payment_charge_id, '- skipping');
+        return;
+      }
       const payload = String(sp.invoice_payload || '');
       if (payload.startsWith('gift_access_')) {
         const token = await createGiftToken(msg.from.id, 'purchased', GIFT_PURCHASED_DAYS);
