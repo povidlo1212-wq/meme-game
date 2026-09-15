@@ -586,7 +586,7 @@ function buyGiftPremiumCard(){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.error==='card payment not configured yet'){alert('Оплата картой/СБП скоро появится, пока доступна оплата через Stars.');return;}
-      if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.');return;}
+      if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.'+(d.detail?('\n\n'+d.detail):''));return;}
       closeGiftModal();
       alert('После оплаты бот пришлёт тебе в личку ссылку — перешли её другу.');
       if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink){
@@ -638,7 +638,7 @@ function buyKinoAccessCard(){
     .then(function(d){
       if(d.alreadyPaid){__kinoPaid=true;updateKinoButton();closePremiumModal();return;}
       if(d.error==='card payment not configured yet'){alert('Оплата картой/СБП скоро появится, пока доступна оплата через Stars.');return;}
-      if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.');return;}
+      if(!d.url){alert('Не удалось создать ссылку на оплату, попробуй позже.'+(d.detail?('\n\n'+d.detail):''));return;}
       if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.openLink){
         Telegram.WebApp.openLink(d.url);
       }else{

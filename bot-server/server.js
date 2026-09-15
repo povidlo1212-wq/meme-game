@@ -426,12 +426,15 @@ app.post('/api/create-tbank-payment', async (req, res) => {
     });
   } catch (e) {
     console.error('T-Bank Init request failed:', e);
-    return res.status(502).json({ error: 'tbank api unreachable' });
+    return res.status(502).json({ error: 'tbank api unreachable', detail: e && e.message });
   }
 
   if (!result.Success) {
     console.error('T-Bank Init failed:', JSON.stringify(result));
-    return res.status(502).json({ error: 'tbank api error' });
+    return res.status(502).json({
+      error: 'tbank api error',
+      detail: result.Message || result.Details || `ErrorCode ${result.ErrorCode || '?'}`,
+    });
   }
   if (!isGift) markPending(user.id, 'card').catch(() => {});
   res.json({ url: result.PaymentURL });
