@@ -329,14 +329,14 @@ input:focus{border-color:#3a7bd5;}
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="https://i.ibb.co/62r0PF3/image.jpg" alt="Мемы из фильмов и сериалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Мемы из фильмов и сериалов</div>
-          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button><button class="cat-play" id="kino-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff;line-height:1.3;padding-top:9px;padding-bottom:9px" onclick="sndClick();openPremiumModal()">💎 Подключить премиум<span style="display:block;font-size:.6rem;font-weight:700;opacity:.92;margin-top:2px;">🎁 неделя премиума в подарок другу</span></button><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
+          <button class="cat-play" id="kino-play-btn" onclick="sndClick();enterHome('kino')">ИГРАТЬ</button><div id="kino-premium-wrap" style="display:none;position:relative;margin-top:14px;"><div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#FFD600;color:#1a1a1a;font-size:.56rem;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:2;">🎁 +неделя другу в подарок</div><button class="cat-play" id="kino-premium-btn" style="width:100%;margin:0;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button></div><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
         </div>
       </div>
       <div class="cat-card" style="background:oklch(0.52 0.14 210)">
         <div class="cat-thumb" style="height:auto;aspect-ratio:430/640"><img src="img/cover.jpg" alt="Мемы зуммеров и миллениалов" style="object-position:center top"></div>
         <div class="cat-body">
           <div class="cat-body-txt">Всё лучшее из двух поколений в одной колоде</div>
-          <button class="cat-play" id="combo-play-btn" onclick="sndClick();enterHome('combo')">ИГРАТЬ</button><button class="cat-play" id="combo-premium-btn" style="display:none;margin-top:6px;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff;line-height:1.3;padding-top:9px;padding-bottom:9px" onclick="sndClick();openPremiumModal()">💎 Подключить премиум<span style="display:block;font-size:.6rem;font-weight:700;opacity:.92;margin-top:2px;">🎁 неделя премиума в подарок другу</span></button><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
+          <button class="cat-play" id="combo-play-btn" onclick="sndClick();enterHome('combo')">ИГРАТЬ</button><div id="combo-premium-wrap" style="display:none;position:relative;margin-top:14px;"><div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#FFD600;color:#1a1a1a;font-size:.56rem;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:2;">🎁 +неделя другу в подарок</div><button class="cat-play" id="combo-premium-btn" style="width:100%;margin:0;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button></div><button class="cat-play" style="margin-top:6px;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff" onclick="sndClick();openGiftModal()">🎁 Подарить премиум</button>
         </div>
       </div>
     </div>
@@ -365,7 +365,7 @@ input:focus{border-color:#3a7bd5;}
         <button class="btn btn-y btn-full" onclick="sndClick();createRoom()">🎮 Создать комнату</button>
         <button class="btn btn-g btn-full" onclick="sndClick();findGame()">🔍 Найти игру</button>
       </div>
-      <button class="btn btn-full" id="home-premium-btn" style="display:none;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff;line-height:1.3;padding-top:11px;padding-bottom:11px" onclick="sndClick();openPremiumModal()">💎 Подключить премиум<span style="display:block;font-size:.66rem;font-weight:700;opacity:.92;margin-top:2px;">🎁 неделя премиума в подарок другу</span></button>
+      <div id="home-premium-wrap" style="display:none;position:relative;margin-top:14px;"><div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#FFD600;color:#1a1a1a;font-size:.64rem;font-weight:800;padding:3px 10px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:2;">🎁 +неделя другу в подарок</div><button class="btn btn-full" id="home-premium-btn" style="margin:0;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button></div>
       <button class="btn btn-full" id="home-gift-btn" style="display:none;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff;margin-top:8px" onclick="sndClick();openGiftModal()">🎁 Подарить премиум другу</button>
       <div class="divider">— или —</div>
       <label>Код комнаты</label>
@@ -513,20 +513,20 @@ input:focus{border-color:#3a7bd5;}
 var KINO_BACKEND_URL='https://meme-game-bot.onrender.com';
 var __kinoPaid=false;
 function tgInitData(){try{return (window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||'';}catch(e){return '';}}
-function updatePremiumBtn(id){var b=document.getElementById(id);if(b)b.style.display=__kinoPaid?'none':'';}
+function updatePremiumBtn(wrapId){var w=document.getElementById(wrapId);if(w)w.style.display=__kinoPaid?'none':'';}
 function updateKinoButton(){
-  updatePremiumBtn('kino-premium-btn');
-  updatePremiumBtn('combo-premium-btn');
+  updatePremiumBtn('kino-premium-wrap');
+  updatePremiumBtn('combo-premium-wrap');
   updateHomeAccessUI();
 }
 function updateHomeAccessUI(){
   var locked=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo')&&!__kinoPaid;
   var isPremCat=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo');
   var actions=document.getElementById('home-access-actions');
-  var premBtn=document.getElementById('home-premium-btn');
+  var premWrap=document.getElementById('home-premium-wrap');
   var giftBtn=document.getElementById('home-gift-btn');
   if(actions)actions.style.display=locked?'none':'';
-  if(premBtn)premBtn.style.display=locked?'':'none';
+  if(premWrap)premWrap.style.display=locked?'':'none';
   // The gift button stays visible regardless of the viewer's own premium status -
   // you can always buy premium as a gift for someone else.
   if(giftBtn)giftBtn.style.display=isPremCat?'':'none';
