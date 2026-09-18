@@ -365,8 +365,7 @@ input:focus{border-color:#3a7bd5;}
         <button class="btn btn-y btn-full" onclick="sndClick();createRoom()">🎮 Создать комнату</button>
         <button class="btn btn-g btn-full" onclick="sndClick();findGame()">🔍 Найти игру</button>
       </div>
-      <div id="home-premium-wrap" style="display:none;position:relative;margin-top:14px;"><div class="gift-only" style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff;font-size:.64rem;font-weight:800;padding:3px 10px;border-radius:999px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:2;">🎁 +неделя другу в подарок</div><button class="btn btn-full" id="home-premium-btn" style="margin:0;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button></div>
-      <button class="btn btn-full" id="home-gift-btn" style="display:none;background:linear-gradient(135deg,#00b09b,#96c93d);color:#fff;margin-top:8px" onclick="sndClick();openGiftModal()">🎁 Подарить премиум другу</button>
+      <div id="home-premium-wrap" style="display:none;position:relative;margin-top:14px;"><button class="btn btn-full" id="home-premium-btn" style="margin:0;background:linear-gradient(135deg,#F72585,#7209B7);color:#fff" onclick="sndClick();openPremiumModal()">💎 Подключить премиум</button></div>
       <div class="divider">— или —</div>
       <label>Код комнаты</label>
       <input type="text" id="h-code" placeholder="XXXX" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;font-size:1.3rem;text-align:center" onkeydown="if(event.key==='Enter'){this.blur();}" onkeyup="if(event.key==='Enter'){this.blur();}">
@@ -563,15 +562,10 @@ function updateKinoButton(){
 }
 function updateHomeAccessUI(){
   var locked=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo')&&!__kinoPaid;
-  var isPremCat=(ACTIVE_CATEGORY==='kino'||ACTIVE_CATEGORY==='combo');
   var actions=document.getElementById('home-access-actions');
   var premWrap=document.getElementById('home-premium-wrap');
-  var giftBtn=document.getElementById('home-gift-btn');
   if(actions)actions.style.display=locked?'none':'';
   if(premWrap)premWrap.style.display=locked?'':'none';
-  // The gift button stays visible regardless of the viewer's own premium status -
-  // you can always buy premium as a gift for someone else.
-  if(giftBtn)giftBtn.style.display=(isPremCat&&!IS_YANDEX)?'':'none';
 }
 function openPremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.add('open');}
 function closePremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.remove('open');}
