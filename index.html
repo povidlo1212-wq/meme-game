@@ -544,6 +544,7 @@ if(IS_YANDEX){
           ysdk.getPlayer({scopes:false}).then(function(p){
             yaPlayerId='ya_'+p.getUniqueID();
             try{checkKinoAccess();}catch(e){}
+            try{checkYandexUnconsumed();}catch(e){}
           }).catch(function(){});
         }).catch(function(e){console.error('YaGames.init failed',e);});
       }catch(e){console.error('YaGames init threw',e);}
@@ -772,6 +773,24 @@ function buyKinoAccessYandex(){
     // alert() on every cancel.
     console.error('Yandex purchase failed/cancelled',e);
   });
+}
+// Yandex requires the game to look for purchases that were paid but never
+// consumed (e.g. the player closed the game right after paying) and finish them
+// on startup - otherwise moderation fails. We verify the signed list on our
+// server, grant premium, then consume each token so the product can be re-bought.
+function checkYandexUnconsumed(){
+  if(!ysdk||!yaPlayerId)return;
+  ysdk.getPayments({signed:true}).then(function(payments){
+    return payments.getPurchases().then(function(res){
+      var list=(res&&res.purchases)||[];
+      if(!list.length||!res.signature)return;
+      return fetch(KINO_BACKEND_URL+'/api/yandex/verify-purchase',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature:res.signature,yaPlayerId:yaPlayerId})}).then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.ok)return;
+        __kinoPaid=true;updateKinoButton();
+        (d.tokens||[]).forEach(function(t){payments.consumePurchase(t).catch(function(){});});
+      });
+    });
+  }).catch(function(){});
 }
 function showYandexPurchaseSuccessModal(){
   var titleEl=document.getElementById('gift-share-title');if(titleEl)titleEl.textContent='🎉 Оплата прошла успешно!';

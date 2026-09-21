@@ -586,31 +586,46 @@ function verifyYandexSignature(signature) {
 // real source of truth that a purchase can't be redeemed again.
 const _yaUsedTokens = new Set();
 
+// Accepts both the single-purchase receipt from payments.purchase() and the list
+// receipt from payments.getPurchases() (the startup check for unconsumed
+// purchases that Yandex requires before moderation).
+function extractYandexPurchases(parsed) {
+  const d = parsed && parsed.data;
+  const list = Array.isArray(d) ? d : d ? [d] : [];
+  return list
+    .map((x) => ({
+      token: x.token || x.purchaseToken,
+      productId: (x.product && x.product.id) || x.productID || x.productId,
+      payerId: x.developerPayload,
+    }))
+    .filter((x) => x.token && x.productId);
+}
+
 app.post('/api/yandex/verify-purchase', async (req, res) => {
   if (!YANDEX_PAYMENTS_SECRET) return res.status(503).json({ error: 'yandex payments not configured yet' });
   const parsed = verifyYandexSignature(req.body.signature);
   if (!parsed) return res.status(400).json({ error: 'bad signature', detail: 'signature did not verify' });
-  const data = parsed.data || {};
-  const productId = data.product && data.product.id;
-  const token = data.token;
-  const payerId = data.developerPayload || req.body.yaPlayerId;
-  if (!productId || !token || !payerId) {
-    return res.status(400).json({ error: 'incomplete purchase data' });
+  const purchases = extractYandexPurchases(parsed);
+  if (!purchases.length) return res.status(400).json({ error: 'incomplete purchase data' });
+  const tokens = [];
+  for (const pu of purchases) {
+    const days = YANDEX_PRODUCT_DAYS[pu.productId];
+    const payerId = pu.payerId || req.body.yaPlayerId;
+    if (!days || !payerId) continue;
+    if (!_yaUsedTokens.has(pu.token)) {
+      _yaUsedTokens.add(pu.token);
+      try {
+        await markPaid(payerId, pu.token, days);
+      } catch (e) {
+        _yaUsedTokens.delete(pu.token);
+        console.error('yandex verify-purchase markPaid error:', e.message);
+        return res.status(500).json({ error: 'server error' });
+      }
+    }
+    tokens.push(pu.token);
   }
-  if (_yaUsedTokens.has(token)) {
-    return res.json({ ok: true, token, alreadyProcessed: true });
-  }
-  const days = YANDEX_PRODUCT_DAYS[productId];
-  if (!days) return res.status(400).json({ error: 'unknown product', detail: productId });
-  _yaUsedTokens.add(token);
-  try {
-    await markPaid(payerId, token, days);
-  } catch (e) {
-    _yaUsedTokens.delete(token);
-    console.error('yandex verify-purchase markPaid error:', e.message);
-    return res.status(500).json({ error: 'server error' });
-  }
-  res.json({ ok: true, token });
+  if (!tokens.length) return res.status(400).json({ error: 'unknown product or payer' });
+  res.json({ ok: true, token: tokens[0], tokens });
 });
 
 // ============================================================================
