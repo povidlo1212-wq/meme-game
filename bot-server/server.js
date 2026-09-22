@@ -363,6 +363,7 @@ app.get('/_stats', async (req, res) => {
       out[src] = {
         unique_users: v[src].total || Object.keys(v[src].users || {}).length,
         daily: v[src].daily || {},
+        user_ids: Object.keys(v[src].users || {}),
       };
     }
     res.json(out);
