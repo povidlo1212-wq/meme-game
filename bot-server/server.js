@@ -327,7 +327,7 @@ async function tbankCall(method, params) {
 function cleanSource(s) {
   return String(s || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 32).toLowerCase();
 }
-async function trackSource(src, uid) {
+async function trackSource(src, uid, profile) {
   src = cleanSource(src);
   if (!src || !uid) return;
   try {
@@ -340,6 +340,11 @@ async function trackSource(src, uid) {
       await db.ref('sources/' + src + '/total').transaction((n) => (n || 0) + 1);
     }
     await db.ref('sources/' + src + '/daily/' + day).transaction((n) => (n || 0) + 1);
+    // Telegram gives us the name/username for free right in initData - stash it
+    // so /_stats can show who these ids actually are without extra API calls.
+    if (profile) {
+      await db.ref('userProfiles/' + uid).update(profile);
+    }
   } catch (e) {
     console.error('trackSource error:', e.message);
   }
@@ -348,7 +353,11 @@ async function trackSource(src, uid) {
 app.post('/api/track', async (req, res) => {
   const user = validateInitData(req.body.initData);
   if (!user) return res.json({ ok: false });
-  await trackSource(req.body.source, user.id);
+  await trackSource(req.body.source, user.id, {
+    first_name: user.first_name || null,
+    last_name: user.last_name || null,
+    username: user.username || null,
+  });
   res.json({ ok: true });
 });
 
@@ -360,10 +369,31 @@ app.get('/_stats', async (req, res) => {
     const v = snap.exists() ? snap.val() : {};
     const out = {};
     for (const src of Object.keys(v)) {
+      const ids = Object.keys(v[src].users || {});
+      const users = await Promise.all(ids.map(async (uid) => {
+        let profSnap = await db.ref('userProfiles/' + uid).get();
+        let prof = profSnap.exists() ? profSnap.val() : null;
+        // No stashed profile yet (id was tracked before this feature existed) -
+        // resolve it once via Telegram and cache it for next time.
+        if (!prof) {
+          const chat = await tgCall('getChat', { chat_id: uid });
+          if (chat.ok) {
+            prof = {
+              first_name: chat.result.first_name || null,
+              last_name: chat.result.last_name || null,
+              username: chat.result.username || null,
+            };
+            await db.ref('userProfiles/' + uid).set(prof);
+          } else {
+            prof = { error: 'not resolvable (never started the bot, or blocked it)' };
+          }
+        }
+        return Object.assign({ id: uid }, prof);
+      }));
       out[src] = {
-        unique_users: v[src].total || Object.keys(v[src].users || {}).length,
+        unique_users: v[src].total || ids.length,
         daily: v[src].daily || {},
-        user_ids: Object.keys(v[src].users || {}),
+        users,
       };
     }
     res.json(out);
