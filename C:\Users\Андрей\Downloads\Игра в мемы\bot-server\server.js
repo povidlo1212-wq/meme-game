@@ -47,6 +47,12 @@ const YANDEX_PAYMENTS_SECRET = process.env.YANDEX_PAYMENTS_SECRET || '';
 const VK_PAYMENTS_SECRET = process.env.VK_PAYMENTS_SECRET || '';
 const VK_PREMIUM_PRICE_VOTES = parseInt(process.env.VK_PREMIUM_PRICE_VOTES || '35', 10);
 
+// VK Mini Apps launch-params signature key ("Защищённый ключ" in VK app admin,
+// Настройки → base) - different secret from VK_PAYMENTS_SECRET above. VK's
+// rules (1.2.2) require validating the signature of launch params rather than
+// trusting vk_user_id straight from the URL, so this verifies it server-side.
+const VK_APP_SECRET = process.env.VK_APP_SECRET || '';
+
 // Support bot — optional: your own Telegram chat id to receive a copy of every
 // support message / bug report players send. Get it from @userinfobot.
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || '';
@@ -413,6 +419,31 @@ app.get('/_stats', async (req, res) => {
   }
 });
 
+// Verifies a VK Mini Apps launch-params query string against VK_APP_SECRET
+// (see https://dev.vk.ru/ru/mini-apps/development/launch-params). Returns the
+// validated vk_user_id, or null if the signature is missing/invalid/unconfigured.
+function vkVerifyLaunchParams(qs) {
+  if (!VK_APP_SECRET || !qs) return null;
+  try {
+    const params = new URLSearchParams(qs);
+    const sign = params.get('sign');
+    if (!sign) return null;
+    const vkEntries = [];
+    for (const [k, v] of params) {
+      if (k.startsWith('vk_')) vkEntries.push([k, v]);
+    }
+    vkEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    const sorted = vkEntries.map(([k, v]) => `${k}=${v}`).join('&');
+    const computed = crypto.createHmac('sha256', VK_APP_SECRET).update(sorted).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (computed !== sign) return null;
+    const uid = params.get('vk_user_id');
+    return uid ? String(uid) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // --- API: check access ---
 app.post('/api/check-access', async (req, res) => {
   let uid;
@@ -422,9 +453,13 @@ app.post('/api/check-access', async (req, res) => {
     // flow below) is verified server-side via the signed Yandex receipt.
     uid = String(req.body.yaPlayerId);
   } else if (req.body.platform === 'vk' && req.body.vkUserId) {
-    // Same deal as Yandex above: client-asserted id is fine for a read-only
-    // check. Access is only ever granted via VK's own signed payment webhook.
-    uid = String(req.body.vkUserId);
+    // Prefer the signature-verified id from launch params (VK rules 1.2.2);
+    // fall back to the client-asserted id only if verification isn't
+    // possible (e.g. VK_APP_SECRET not yet configured). Either way this is
+    // just a read-only "am I paid" check - actual access is only ever
+    // granted via VK's own signed payment webhook.
+    const verifiedUid = vkVerifyLaunchParams(req.body.launchParams);
+    uid = 'vk_' + (verifiedUid || String(req.body.vkUserId).replace(/^vk_/, ''));
   } else {
     const user = validateInitData(req.body.initData);
     if (!user) return res.status(401).json({ error: 'invalid initData' });

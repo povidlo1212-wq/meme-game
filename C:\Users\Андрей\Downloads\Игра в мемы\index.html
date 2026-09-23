@@ -519,6 +519,7 @@ var IS_YANDEX=GAME_PLATFORM==='yandex';
 var IS_VK=GAME_PLATFORM==='vk';
 var ysdk=null,yaPlayerId=null;
 var vkUserId=null;
+var vkLaunchParams=null;
 function applyPlatformUI(){
   if(!IS_YANDEX&&!IS_VK)return;
   try{
@@ -538,6 +539,11 @@ if(IS_VK){
       try{
         vkBridge.send('VKWebAppInit').catch(function(){});
         var uid=new URLSearchParams(location.search).get('vk_user_id');
+        // VK requires validating the signature of launch params (see VK Mini
+        // Apps rules 1.2.2 / games launch-params docs), not just trusting
+        // vk_user_id from the URL. We send the raw query string to the server
+        // and let it verify the signature there with the app's secret key.
+        vkLaunchParams=location.search.replace(/^\?/,'');
         if(uid){
           vkUserId='vk_'+uid;
           try{checkKinoAccess();}catch(e){}
@@ -597,7 +603,7 @@ function checkKinoAccess(){
     body={platform:'yandex',yaPlayerId:yaPlayerId};
   }else if(IS_VK){
     if(!vkUserId){updateKinoButton();return;}
-    body={platform:'vk',vkUserId:vkUserId};
+    body={platform:'vk',vkUserId:vkUserId,launchParams:vkLaunchParams};
   }else{
     var initData=tgInitData();
     if(!initData){updateKinoButton();return;}
@@ -837,7 +843,7 @@ function buyKinoAccessVk(){
   }).catch(function(e){console.error('VK purchase failed/cancelled',e);});
 }
 function pollVkPurchase(attempt){
-  fetch(KINO_BACKEND_URL+'/api/check-access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:'vk',vkUserId:vkUserId})})
+  fetch(KINO_BACKEND_URL+'/api/check-access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({platform:'vk',vkUserId:vkUserId,launchParams:vkLaunchParams})})
     .then(function(r){return r.json();}).then(function(d){
       if(d.paid){__kinoPaid=true;updateKinoButton();closePremiumModal();showVkPurchaseSuccessModal();return;}
       if(attempt<8)setTimeout(function(){pollVkPurchase(attempt+1);},1000);
