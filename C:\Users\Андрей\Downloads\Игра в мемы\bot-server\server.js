@@ -45,7 +45,7 @@ const YANDEX_PAYMENTS_SECRET = process.env.YANDEX_PAYMENTS_SECRET || '';
 // (Управление → Оплата), separate from the app's main "Защищённый ключ".
 // Leave empty to disable. Price is in VK's internal currency (голоса).
 const VK_PAYMENTS_SECRET = process.env.VK_PAYMENTS_SECRET || '';
-const VK_PREMIUM_PRICE_VOTES = parseInt(process.env.VK_PREMIUM_PRICE_VOTES || '35', 10);
+const VK_PREMIUM_PRICE_VOTES = parseInt(process.env.VK_PREMIUM_PRICE_VOTES || '19', 10);
 
 // VK Mini Apps launch-params signature key ("Защищённый ключ" in VK app admin,
 // Настройки → base) - different secret from VK_PAYMENTS_SECRET above. VK's
