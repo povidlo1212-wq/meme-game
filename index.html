@@ -252,10 +252,10 @@ input:focus{border-color:#3a7bd5;}
 .mob-nick{font-size:.62rem;font-weight:800;color:#fff;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
 .mob-score{font-size:.6rem;font-weight:900;color:#FFD600;}
 
-.settings-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;touch-action:auto;}
+.settings-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;touch-action:manipulation;-webkit-user-select:none;user-select:none;}
 .settings-modal.open{display:flex;}
-.settings-box{background:#1a2244;border:2px solid #FFD600;border-radius:18px;padding:20px;margin:16px;width:100%;max-width:360px;max-height:85vh;overflow-y:auto;touch-action:auto;}
-.settings-modal .settings-btn{touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,214,0,.25);}
+.settings-box{background:#1a2244;border:2px solid #FFD600;border-radius:18px;padding:20px;margin:16px;width:100%;max-width:360px;max-height:85vh;overflow-y:auto;touch-action:manipulation;}
+.settings-btn,.settings-modal .settings-btn{touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,214,0,.25);-webkit-user-select:none;user-select:none;}
 .settings-title{font-size:1.2rem;font-weight:900;color:#FFD600;text-align:center;margin-bottom:16px;}
 .settings-section{margin-bottom:18px;}
 .settings-label{font-size:.8rem;color:#aac4ff;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
