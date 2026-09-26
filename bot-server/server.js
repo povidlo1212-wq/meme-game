@@ -1182,7 +1182,41 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-const VERSION = 'support-bot 2026-09-26 (VPN payment fallback)';
+const VERSION = 'support-bot 2026-09-26 (Amvera webhook + VPN payment fallback)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
-app.listen(PORT, () => console.log(`Listening on port ${PORT} (${VERSION})`));
+async function ensureAmveraWebhook() {
+  let target;
+  try {
+    const base = new URL(PUBLIC_URL);
+    if (base.protocol !== 'https:' || !base.hostname.endsWith('.amvera.io')) {
+      console.error('Telegram webhook not changed: PUBLIC_URL must be an Amvera HTTPS address');
+      return;
+    }
+    target = new URL(`/webhook/${WEBHOOK_SECRET}`, base).toString();
+  } catch (e) {
+    console.error('Telegram webhook not changed: invalid PUBLIC_URL');
+    return;
+  }
+
+  const current = await tgCall('getWebhookInfo', {});
+  if (!current.ok) {
+    console.error('Telegram webhook status could not be checked');
+    return;
+  }
+  if (current.result && current.result.url === target) {
+    console.log('Telegram webhook already points to Amvera');
+    return;
+  }
+  const updated = await tgCall('setWebhook', {
+    url: target,
+    drop_pending_updates: false,
+  });
+  if (updated.ok) console.log('Telegram webhook switched to Amvera');
+  else console.error('Telegram webhook could not be switched to Amvera');
+}
+
+app.listen(PORT, () => {
+  console.log(`Listening on port ${PORT} (${VERSION})`);
+  ensureAmveraWebhook().catch((e) => console.error('Telegram webhook setup failed:', e));
+});
