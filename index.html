@@ -616,9 +616,9 @@ function updateHomeAccessUI(){
 function updatePremiumConnectionWarning(){var w=document.getElementById('premium-connection-warning');if(w)w.style.display=__accessConnectionFailed?'block':'none';}
 function openPremiumModal(){updatePremiumConnectionWarning();var m=document.getElementById('premium-modal');if(m)m.classList.add('open');}
 function closePremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.remove('open');}
-// Enable only after the matching bot-server build is deployed on Amvera and
-// Telegram's webhook is verified there. GitHub Pages deploys independently.
-var BOT_PAYMENT_FALLBACK_READY=false;
+// The matching bot-server build is deployed on Amvera and Telegram's webhook
+// points there. GitHub Pages deploys independently.
+var BOT_PAYMENT_FALLBACK_READY=true;
 function offerPaymentViaBot(method,isGift){
   if(!BOT_PAYMENT_FALLBACK_READY){alert('Не удалось связаться с сервером оплаты. Если включён VPN, попробуй другую сеть. Если премиум уже куплен, не плати повторно.');return;}
   if(!window.Telegram||!Telegram.WebApp||!Telegram.WebApp.openTelegramLink){alert('Не удалось связаться с сервером оплаты. Попробуй другой VPN или сеть.');return;}
