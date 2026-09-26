@@ -680,6 +680,7 @@ function checkPendingCardPurchase(){
 function buyKinoAccess(){
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
+  if(BOT_PAYMENT_FALLBACK_READY&&__accessConnectionFailed){offerPaymentViaBot('stars',false);return;}
   fetchBackend('/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -704,6 +705,7 @@ function closeGiftShareModal(){var m=document.getElementById('gift-share-modal')
 function buyGiftPremium(){
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
+  if(BOT_PAYMENT_FALLBACK_READY&&__accessConnectionFailed){offerPaymentViaBot('stars',true);return;}
   fetchBackend('/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -719,6 +721,7 @@ function buyGiftPremium(){
 function buyGiftPremiumCard(){
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
+  if(BOT_PAYMENT_FALLBACK_READY&&__accessConnectionFailed){offerPaymentViaBot('card',true);return;}
   fetchBackend('/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -802,6 +805,7 @@ function celebrateConfetti(){
 function buyKinoAccessCard(){
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
+  if(BOT_PAYMENT_FALLBACK_READY&&__accessConnectionFailed){offerPaymentViaBot('card',false);return;}
   fetchBackend('/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
     .then(function(r){return r.json();})
     .then(function(d){
