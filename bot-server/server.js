@@ -1123,11 +1123,13 @@ async function handleTextMessage(msg) {
   );
 }
 
-// --- Telegram webhook ---
-app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
-  const update = req.body;
-  res.sendStatus(200); // ack immediately, process after
-
+// Shared update handler: polling does not rely on Telegram reaching Amvera.
+async function processTelegramUpdate(update) {
+  const type = update.pre_checkout_query ? 'pre_checkout_query'
+    : update.callback_query ? 'callback_query'
+    : update.message && update.message.successful_payment ? 'successful_payment'
+    : update.message ? 'message' : 'other';
+  console.log(`Telegram update received: ${type}`);
   try {
     if (update.pre_checkout_query) {
       const q = update.pre_checkout_query;
@@ -1178,45 +1180,58 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
       return;
     }
   } catch (e) {
-    console.error('webhook processing error:', e);
+    console.error('Telegram update processing error:', e);
   }
+}
+
+// Keep the old endpoint available during rollout; polling removes its webhook.
+app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
+  const update = req.body;
+  res.sendStatus(200);
+  await processTelegramUpdate(update);
 });
 
-const VERSION = 'support-bot 2026-09-26 (Amvera webhook + VPN payment fallback)';
+const VERSION = 'support-bot 2026-09-26 (Telegram polling + VPN payment fallback)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
-async function ensureAmveraWebhook() {
-  let target;
-  try {
-    const base = new URL(PUBLIC_URL);
-    if (base.protocol !== 'https:' || !base.hostname.endsWith('.amvera.io')) {
-      console.error('Telegram webhook not changed: PUBLIC_URL must be an Amvera HTTPS address');
-      return;
-    }
-    target = new URL(`/webhook/${WEBHOOK_SECRET}`, base).toString();
-  } catch (e) {
-    console.error('Telegram webhook not changed: invalid PUBLIC_URL');
-    return;
-  }
-
-  const current = await tgCall('getWebhookInfo', {});
-  if (!current.ok) {
-    console.error('Telegram webhook status could not be checked');
-    return;
-  }
-  if (current.result && current.result.url === target) {
-    console.log('Telegram webhook already points to Amvera');
-    return;
-  }
-  const updated = await tgCall('setWebhook', {
-    url: target,
+async function pollTelegramUpdates() {
+  // getUpdates and a webhook cannot run at the same time. Preserve queued
+  // messages and payments while switching delivery modes.
+  const removed = await tgCall('deleteWebhook', {
     drop_pending_updates: false,
   });
-  if (updated.ok) console.log('Telegram webhook switched to Amvera');
-  else console.error('Telegram webhook could not be switched to Amvera');
+  if (!removed.ok) {
+    console.error('Telegram polling could not start: deleteWebhook failed');
+    setTimeout(pollTelegramUpdates, 5000);
+    return;
+  }
+  console.log('Telegram webhook removed; polling started');
+  let offset = 0;
+  for (;;) {
+    const batch = await tgCall('getUpdates', {
+      offset,
+      limit: 50,
+      timeout: 20,
+      allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
+    });
+    if (!batch.ok || !Array.isArray(batch.result)) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      continue;
+    }
+    for (const update of batch.result) {
+      await processTelegramUpdate(update);
+      offset = Math.max(offset, update.update_id + 1);
+    }
+  }
 }
 
 app.listen(PORT, () => {
   console.log(`Listening on port ${PORT} (${VERSION})`);
-  ensureAmveraWebhook().catch((e) => console.error('Telegram webhook setup failed:', e));
+  const startPolling = () => {
+    pollTelegramUpdates().catch((e) => {
+      console.error('Telegram polling stopped; retrying:', e);
+      setTimeout(startPolling, 3000);
+    });
+  };
+  startPolling();
 });
