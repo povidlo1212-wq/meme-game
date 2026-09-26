@@ -626,7 +626,7 @@ function useBotPaymentOnThisDevice(){
 }
 function offerPaymentViaBot(method,isGift){
   if(!BOT_PAYMENT_FALLBACK_READY){alert('Не удалось связаться с сервером оплаты. Если включён VPN, попробуй другую сеть. Если премиум уже куплен, не плати повторно.');return;}
-  if(!window.Telegram||!Telegram.WebApp||!Telegram.WebApp.openTelegramLink){alert('Не удалось связаться с сервером оплаты. Попробуй другой VPN или сеть.');return;}
+  if(!window.Telegram||!Telegram.WebApp){alert('Чтобы продолжить оплату, открой игру через Telegram-бота.');return;}
   var old=document.getElementById('payment-bot-fallback');if(old)old.remove();
   var overlay=document.createElement('div');overlay.id='payment-bot-fallback';
   overlay.style.cssText='position:fixed;inset:0;z-index:1000002;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -635,7 +635,7 @@ function offerPaymentViaBot(method,isGift){
   var text=document.createElement('div');text.textContent=(!isGift&&__kinoPaid)?'Премиум уже активен. Бот проверит его статус — не оплачивай повторно.':method==='stars'?'Бот пришлёт счёт Stars прямо в Telegram. Если появится кнопка «Запустить», нажми её.':'Бот пришлёт кнопку со ссылкой на оплату картой или через СБП. Если появится «Запустить», нажми её.';text.style.cssText='font-size:.9rem;line-height:1.5;margin-bottom:16px;';box.appendChild(text);
   var go=document.createElement('button');go.className='settings-btn';go.textContent='Продолжить в боте';go.style.cssText='background:#FFD600;color:#1a1a1a;width:100%;margin:0 0 8px;';
   var botUrl='https://t.me/meme_millennials_bot?start=pay_'+method+(isGift?'_gift':'');
-  go.onclick=function(){try{Telegram.WebApp.openTelegramLink(botUrl);overlay.remove();}catch(e){alert('Не удалось открыть бота. Используй ссылку ниже.');}};box.appendChild(go);
+  go.onclick=function(){try{if(Telegram.WebApp.openTelegramLink){Telegram.WebApp.openTelegramLink(botUrl);overlay.remove();}else{window.location.href=botUrl;}}catch(e){alert('Не удалось открыть бота. Используй ссылку ниже.');}};box.appendChild(go);
   var direct=document.createElement('a');direct.href=botUrl;direct.textContent='Если бот не открылся — открыть ссылку';direct.style.cssText='display:block;color:#FFD600;font-size:.78rem;margin:4px 0 14px;text-decoration:underline;';box.appendChild(direct);
   var cancel=document.createElement('button');cancel.className='settings-btn';cancel.textContent='Отмена';cancel.style.cssText='background:#444;color:#fff;width:100%;margin:0;';cancel.onclick=function(){overlay.remove();};box.appendChild(cancel);
   overlay.appendChild(box);document.body.appendChild(overlay);
@@ -685,9 +685,9 @@ function checkPendingCardPurchase(){
   }
 }
 function buyKinoAccess(){
+  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('stars',false);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('stars',false);return;}
   fetchBackend('/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -710,9 +710,9 @@ function openGiftModal(){var m=document.getElementById('gift-modal');if(m)m.clas
 function closeGiftModal(){var m=document.getElementById('gift-modal');if(m)m.classList.remove('open');}
 function closeGiftShareModal(){var m=document.getElementById('gift-share-modal');if(m)m.classList.remove('open');}
 function buyGiftPremium(){
+  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('stars',true);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('stars',true);return;}
   fetchBackend('/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -726,9 +726,9 @@ function buyGiftPremium(){
     .catch(function(){offerPaymentViaBot('stars',true);});
 }
 function buyGiftPremiumCard(){
+  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('card',true);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('card',true);return;}
   fetchBackend('/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -810,9 +810,9 @@ function celebrateConfetti(){
   }catch(e){}
 }
 function buyKinoAccessCard(){
+  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('card',false);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('card',false);return;}
   fetchBackend('/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
     .then(function(r){return r.json();})
     .then(function(d){
