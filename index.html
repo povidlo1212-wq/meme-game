@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -256,7 +255,7 @@ input:focus{border-color:#3a7bd5;}
 .settings-modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:10000;align-items:center;justify-content:center;touch-action:manipulation;-webkit-user-select:none;user-select:none;}
 .settings-modal.open{display:flex;}
 .settings-box{background:#1a2244;border:2px solid #FFD600;border-radius:18px;padding:20px;margin:16px;width:100%;max-width:360px;max-height:85vh;overflow-y:auto;touch-action:manipulation;}
-.settings-btn,.settings-modal .settings-btn{touch-action:none;-webkit-tap-highlight-color:rgba(255,214,0,.25);-webkit-user-select:none;user-select:none;transition:transform .08s,filter .08s,box-shadow .08s;}
+.settings-btn,.settings-modal .settings-btn{touch-action:manipulation;-webkit-tap-highlight-color:rgba(255,214,0,.25);-webkit-user-select:none;user-select:none;transition:transform .08s,filter .08s,box-shadow .08s;}
 .settings-btn:active,.settings-btn.tap-active{transform:scale(.97);filter:brightness(1.18);}
 .settings-title{font-size:1.2rem;font-weight:900;color:#FFD600;text-align:center;margin-bottom:16px;}
 .settings-section{margin-bottom:18px;}
@@ -642,20 +641,6 @@ function checkPendingCardPurchase(){
   }else{
     fetchAndShowGiftLink('purchased');
   }
-}
-function fastPaymentTap(btn,fn,ev){
-  if(!btn||!fn)return;
-  ev=ev||window.event;
-  if(ev&&ev.type==='touchstart'){
-    if(btn.dataset.paymentTouch==='1')return;
-    btn.dataset.paymentTouch='1';
-    btn.classList.add('tap-active');
-    setTimeout(function(){btn.dataset.paymentTouch='0';btn.classList.remove('tap-active');},900);
-    try{fn();}catch(e){console.error('payment tap failed',e);}
-    return;
-  }
-  if(ev&&ev.type==='click'&&btn.dataset.paymentTouch==='1'){ev.preventDefault();return;}
-  fn();
 }
 function buyKinoAccess(){
   var initData=tgInitData();
@@ -1782,8 +1767,8 @@ initTimerSettings();
     <div class="gift-only" style="font-size:.78rem;color:#96f7c1;line-height:1.5;margin:0 0 16px;text-align:center;font-weight:700;background:rgba(0,176,155,.18);border:1px solid rgba(150,247,193,.4);border-radius:10px;padding:8px 10px;">
       🎁 Акция: сразу после оплаты в игре появится ссылка, чтобы подарить другу неделю премиума бесплатно. Она же продублируется от бота в личку.
     </div>
-    <button id="premium-btn-stars" class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="fastPaymentTap(this,function(){sndClick();buyKinoAccess()},event)" ontouchstart="fastPaymentTap(this,function(){sndClick();buyKinoAccess()},event)">⭐ Оплатить Stars</button>
-    <button id="premium-btn-card" class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="fastPaymentTap(this,function(){sndClick();buyKinoAccessCard()},event)" ontouchstart="fastPaymentTap(this,function(){sndClick();buyKinoAccessCard()},event)">💳 Карта / СБП · 149 ₽</button>
+    <button id="premium-btn-stars" class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccess()">⭐ Оплатить Stars</button>
+    <button id="premium-btn-card" class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyKinoAccessCard()">💳 Карта / СБП · 149 ₽</button>
     <button id="premium-btn-yandex" class="settings-btn" style="display:none;background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccessYandex()">💎 Купить премиум на месяц</button>
     <button id="premium-btn-vk" class="settings-btn" style="display:none;background:#0077FF;color:#fff" onclick="sndClick();buyKinoAccessVk()">💎 Купить премиум на месяц</button>
     <button class="settings-btn settings-close" onclick="closePremiumModal()">✕ Закрыть</button>
@@ -1796,8 +1781,8 @@ initTimerSettings();
     <div style="font-size:.85rem;color:#fff;line-height:1.55;margin:4px 0 18px;text-align:center;font-weight:600">
       Оплачиваешь ты — премиум на месяц достаётся тому, кому отправишь ссылку. Работает, даже если у тебя уже есть премиум или ты уже кому-то дарил.
     </div>
-    <button class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="fastPaymentTap(this,function(){sndClick();buyGiftPremium()},event)" ontouchstart="fastPaymentTap(this,function(){sndClick();buyGiftPremium()},event)">⭐ Оплатить Stars</button>
-    <button class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="fastPaymentTap(this,function(){sndClick();buyGiftPremiumCard()},event)" ontouchstart="fastPaymentTap(this,function(){sndClick();buyGiftPremiumCard()},event)">💳 Карта / СБП · 149 ₽</button>
+    <button class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyGiftPremium()">⭐ Оплатить Stars</button>
+    <button class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyGiftPremiumCard()">💳 Карта / СБП · 149 ₽</button>
     <button class="settings-btn settings-close" onclick="closeGiftModal()">✕ Закрыть</button>
   </div>
 </div>
