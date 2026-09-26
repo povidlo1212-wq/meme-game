@@ -585,7 +585,21 @@ if(IS_YANDEX){
   })();
 }
 var __kinoPaid=false;
+var __accessConnectionFailed=false;
 function tgInitData(){try{return (window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData)||'';}catch(e){return '';}}
+// Keep the last server-confirmed Telegram access on this device for short
+// network outages. Never use a cached denial: a purchase may have happened
+// in another Telegram session since the last successful check.
+var PREMIUM_CACHE_MAX_AGE=24*60*60*1000;
+function premiumCacheKey(){try{var u=Telegram.WebApp.initDataUnsafe.user;return u&&u.id?'mm_paid_verified_'+u.id:'';}catch(e){return '';}}
+function rememberPremiumAccess(paid){
+  var key=premiumCacheKey();if(!key)return;
+  try{if(paid)localStorage.setItem(key,String(Date.now()));else localStorage.removeItem(key);}catch(e){}
+}
+function restorePremiumAccess(){
+  var key=premiumCacheKey();if(!key)return false;
+  try{var at=Number(localStorage.getItem(key));return at>0&&Date.now()-at<PREMIUM_CACHE_MAX_AGE;}catch(e){return false;}
+}
 function updatePremiumBtn(wrapId){var w=document.getElementById(wrapId);if(w)w.style.display=__kinoPaid?'none':'';}
 function updateKinoButton(){
   updatePremiumBtn('kino-premium-wrap');
@@ -599,8 +613,26 @@ function updateHomeAccessUI(){
   if(actions)actions.style.display=locked?'none':'';
   if(premWrap)premWrap.style.display=locked?'':'none';
 }
-function openPremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.add('open');}
+function updatePremiumConnectionWarning(){var w=document.getElementById('premium-connection-warning');if(w)w.style.display=__accessConnectionFailed?'block':'none';}
+function openPremiumModal(){updatePremiumConnectionWarning();var m=document.getElementById('premium-modal');if(m)m.classList.add('open');}
 function closePremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.remove('open');}
+// Enable only after the matching bot-server build is deployed on Amvera and
+// Telegram's webhook is verified there. GitHub Pages deploys independently.
+var BOT_PAYMENT_FALLBACK_READY=false;
+function offerPaymentViaBot(method,isGift){
+  if(!BOT_PAYMENT_FALLBACK_READY){alert('Не удалось связаться с сервером оплаты. Если включён VPN, попробуй другую сеть. Если премиум уже куплен, не плати повторно.');return;}
+  if(!window.Telegram||!Telegram.WebApp||!Telegram.WebApp.openTelegramLink){alert('Не удалось связаться с сервером оплаты. Попробуй другой VPN или сеть.');return;}
+  var old=document.getElementById('payment-bot-fallback');if(old)old.remove();
+  var overlay=document.createElement('div');overlay.id='payment-bot-fallback';
+  overlay.style.cssText='position:fixed;inset:0;z-index:1000002;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:20px;';
+  var box=document.createElement('div');box.style.cssText='width:100%;max-width:340px;background:#242943;color:white;border:2px solid #FFD600;border-radius:16px;padding:20px;text-align:center;box-sizing:border-box;';
+  var title=document.createElement('div');title.textContent='Связь с сервером недоступна';title.style.cssText='font-size:1.1rem;font-weight:800;margin-bottom:12px;';box.appendChild(title);
+  var text=document.createElement('div');text.textContent=method==='stars'?'Продолжить оплату Stars в чате этого же Telegram-бота?':'Бот создаст ссылку на страницу оплаты картой или через СБП. Страница Т‑Банка откроется из Telegram.';text.style.cssText='font-size:.9rem;line-height:1.5;margin-bottom:16px;';box.appendChild(text);
+  var go=document.createElement('button');go.className='settings-btn';go.textContent='Продолжить в боте';go.style.cssText='background:#FFD600;color:#1a1a1a;width:100%;margin:0 0 8px;';
+  go.onclick=function(){try{Telegram.WebApp.openTelegramLink('https://t.me/meme_millennials_bot?start=pay_'+method+(isGift?'_gift':''));overlay.remove();}catch(e){alert('Не удалось открыть бота. Найди @meme_millennials_bot в Telegram.');}};box.appendChild(go);
+  var cancel=document.createElement('button');cancel.className='settings-btn';cancel.textContent='Отмена';cancel.style.cssText='background:#444;color:#fff;width:100%;margin:0;';cancel.onclick=function(){overlay.remove();};box.appendChild(cancel);
+  overlay.appendChild(box);document.body.appendChild(overlay);
+}
 function checkKinoAccess(){
   var body;
   if(IS_YANDEX){
@@ -616,8 +648,8 @@ function checkKinoAccess(){
   }
   fetchBackend('/api/check-access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();})
-    .then(function(d){__kinoPaid=!!d.paid;updateKinoButton();if(!IS_YANDEX&&!IS_VK)checkPendingCardPurchase();})
-    .catch(function(){updateKinoButton();});
+    .then(function(d){if(typeof d.paid!=='boolean')throw new Error('Invalid access response');__accessConnectionFailed=false;__kinoPaid=d.paid;if(!IS_YANDEX&&!IS_VK)rememberPremiumAccess(__kinoPaid);updateKinoButton();updatePremiumConnectionWarning();if(!IS_YANDEX&&!IS_VK)checkPendingCardPurchase();})
+    .catch(function(){__accessConnectionFailed=true;if(!IS_YANDEX&&!IS_VK&&restorePremiumAccess())__kinoPaid=true;updateKinoButton();updatePremiumConnectionWarning();});
 }
 // Card/SBP payment leaves the Mini App entirely (external Tinkoff page), so
 // there's no in-app callback like Stars has. Mark what we're waiting for
@@ -659,7 +691,7 @@ function buyKinoAccess(){
         });
       }
     })
-    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+    .catch(function(){offerPaymentViaBot('stars',false);});
 }
 // --- Gifting: buy premium as a gift for a friend, and the free-week bonus
 // that comes bundled with every self-purchase. Telegram Mini Apps have no
@@ -682,7 +714,7 @@ function buyGiftPremium(){
         });
       }
     })
-    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+    .catch(function(){offerPaymentViaBot('stars',true);});
 }
 function buyGiftPremiumCard(){
   var initData=tgInitData();
@@ -700,7 +732,7 @@ function buyGiftPremiumCard(){
         window.open(d.url,'_blank');
       }
     })
-    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+    .catch(function(){offerPaymentViaBot('card',true);});
 }
 // The claim token is minted server-side by the payment webhook, which can land
 // a moment after openInvoice's callback fires - poll briefly for it.
@@ -784,7 +816,7 @@ function buyKinoAccessCard(){
         window.open(d.url,'_blank');
       }
     })
-    .catch(function(){alert('Ошибка соединения с сервером оплаты.');});
+    .catch(function(){offerPaymentViaBot('card',false);});
 }
 // --- Yandex Games purchase flow. Payments must go exclusively through the
 // Yandex SDK there (no Stars, no card) - this mirrors buyKinoAccess() but
@@ -864,6 +896,7 @@ function showVkPurchaseSuccessModal(){
   celebrateConfetti();
 }
 document.addEventListener('DOMContentLoaded',applyPlatformUI);
+if(!IS_YANDEX&&!IS_VK&&restorePremiumAccess())__kinoPaid=true;
 updateKinoButton();
 checkKinoAccess();
 // Stop game audio whenever the tab/window loses focus (required by Yandex
@@ -1770,6 +1803,7 @@ initTimerSettings();
     <div class="gift-only" style="font-size:.78rem;color:#96f7c1;line-height:1.5;margin:0 0 16px;text-align:center;font-weight:700;background:rgba(0,176,155,.18);border:1px solid rgba(150,247,193,.4);border-radius:10px;padding:8px 10px;">
       🎁 Акция: сразу после оплаты в игре появится ссылка, чтобы подарить другу неделю премиума бесплатно. Она же продублируется от бота в личку.
     </div>
+    <div id="premium-connection-warning" style="display:none;color:#FFD600;font-size:.77rem;line-height:1.45;margin:0 0 12px;text-align:center;">Не удалось проверить премиум: VPN или сеть не пропускает запрос к серверу. Если ты уже оплатил, не плати повторно — проверь статус в чате бота.</div>
     <button id="premium-btn-stars" class="settings-btn" style="background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccess()">⭐ Оплатить Stars</button>
     <button id="premium-btn-card" class="settings-btn" style="background:#3a4a8a;color:#fff;margin-top:8px" onclick="sndClick();buyKinoAccessCard()">💳 Карта / СБП · 149 ₽</button>
     <button id="premium-btn-yandex" class="settings-btn" style="display:none;background:#FFD600;color:#1a1a1a" onclick="sndClick();buyKinoAccessYandex()">💎 Купить премиум на месяц</button>
