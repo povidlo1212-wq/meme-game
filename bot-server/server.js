@@ -11,10 +11,14 @@ process.on('unhandledRejection', (err) => {
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT;
+const FIREBASE_SERVICE_ACCOUNT_B64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
 const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL;
 const STARS_PRICE = parseInt(process.env.STARS_PRICE || '100', 10);
 const PORT = process.env.PORT || 3000;
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || '*')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // T-Bank (Tinkoff) acquiring — optional, SBP/card payment path.
 // Leave both empty to disable this payment method entirely.
@@ -40,11 +44,29 @@ if (TBANK_ENABLED && !TBANK_RECEIPT_EMAIL) {
 // in-app purchases there (Инап-покупки → Настройки). Leave empty to disable.
 const YANDEX_PAYMENTS_SECRET = process.env.YANDEX_PAYMENTS_SECRET || '';
 
+// VK Mini Apps in-app payments — optional, only used by the ?platform=vk
+// build. The secret is the "Секретный ключ платежей" from the VK app admin
+// (Управление → Оплата), separate from the app's main "Защищённый ключ".
+// Leave empty to disable. Price is in VK's internal currency (голоса).
+const VK_PAYMENTS_SECRET = process.env.VK_PAYMENTS_SECRET || '';
+const VK_PREMIUM_PRICE_VOTES = parseInt(process.env.VK_PREMIUM_PRICE_VOTES || '19', 10);
+
+// VK Mini Apps launch-params signature key ("Защищённый ключ" in VK app admin,
+// Настройки → base) - different secret from VK_PAYMENTS_SECRET above. VK's
+// rules (1.2.2) require validating the signature of launch params rather than
+// trusting vk_user_id straight from the URL, so this verifies it server-side.
+const VK_APP_SECRET = process.env.VK_APP_SECRET || '';
+
 // Support bot — optional: your own Telegram chat id to receive a copy of every
 // support message / bug report players send. Get it from @userinfobot.
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || '';
 
-for (const [name, val] of Object.entries({ BOT_TOKEN, WEBHOOK_SECRET, FIREBASE_SERVICE_ACCOUNT, FIREBASE_DATABASE_URL })) {
+for (const [name, val] of Object.entries({
+  BOT_TOKEN,
+  WEBHOOK_SECRET,
+  FIREBASE_SERVICE_ACCOUNT: FIREBASE_SERVICE_ACCOUNT || FIREBASE_SERVICE_ACCOUNT_B64,
+  FIREBASE_DATABASE_URL,
+})) {
   if (!val) {
     console.error(`Missing required env var: ${name}`);
     process.exit(1);
@@ -53,9 +75,12 @@ for (const [name, val] of Object.entries({ BOT_TOKEN, WEBHOOK_SECRET, FIREBASE_S
 
 let serviceAccount;
 try {
-  serviceAccount = JSON.parse(FIREBASE_SERVICE_ACCOUNT);
+  const rawServiceAccount = FIREBASE_SERVICE_ACCOUNT_B64
+    ? Buffer.from(FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8')
+    : FIREBASE_SERVICE_ACCOUNT;
+  serviceAccount = JSON.parse(rawServiceAccount);
 } catch (e) {
-  console.error('FIREBASE_SERVICE_ACCOUNT is not valid JSON:', e.message);
+  console.error('Firebase service account is not valid JSON/Base64:', e.message);
   process.exit(1);
 }
 
@@ -69,8 +94,16 @@ const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 const app = express();
 app.use(express.json());
+// VK's payment-notification callbacks arrive as application/x-www-form-urlencoded.
+app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  const requestOrigin = req.get('Origin');
+  if (ALLOWED_ORIGINS.includes('*')) {
+    res.header('Access-Control-Allow-Origin', '*');
+  } else if (requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin)) {
+    res.header('Access-Control-Allow-Origin', requestOrigin);
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -123,6 +156,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Yandex product id (set up in the Developer Console under Инап-покупки) ->
 // days of premium it grants. Add more entries here if you create more products.
 const YANDEX_PRODUCT_DAYS = { premium_month: PREMIUM_DAYS };
+// Same idea for VK's payment items (set up in VK app admin under Оплата).
+const VK_PRODUCT_DAYS = { premium_month: PREMIUM_DAYS };
 
 // --- Firebase Realtime Database helpers ---
 // Data lives under /paidUsers/<telegramId>, separate from the game's own multiplayer data.
@@ -402,6 +437,31 @@ app.get('/_stats', async (req, res) => {
   }
 });
 
+// Verifies a VK Mini Apps launch-params query string against VK_APP_SECRET
+// (see https://dev.vk.ru/ru/mini-apps/development/launch-params). Returns the
+// validated vk_user_id, or null if the signature is missing/invalid/unconfigured.
+function vkVerifyLaunchParams(qs) {
+  if (!VK_APP_SECRET || !qs) return null;
+  try {
+    const params = new URLSearchParams(qs);
+    const sign = params.get('sign');
+    if (!sign) return null;
+    const vkEntries = [];
+    for (const [k, v] of params) {
+      if (k.startsWith('vk_')) vkEntries.push([k, v]);
+    }
+    vkEntries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    const sorted = vkEntries.map(([k, v]) => `${k}=${v}`).join('&');
+    const computed = crypto.createHmac('sha256', VK_APP_SECRET).update(sorted).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    if (computed !== sign) return null;
+    const uid = params.get('vk_user_id');
+    return uid ? String(uid) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // --- API: check access ---
 app.post('/api/check-access', async (req, res) => {
   let uid;
@@ -410,6 +470,14 @@ app.post('/api/check-access', async (req, res) => {
     // "am I paid" read. Anything that actually grants access (the purchase
     // flow below) is verified server-side via the signed Yandex receipt.
     uid = String(req.body.yaPlayerId);
+  } else if (req.body.platform === 'vk' && req.body.vkUserId) {
+    // Prefer the signature-verified id from launch params (VK rules 1.2.2);
+    // fall back to the client-asserted id only if verification isn't
+    // possible (e.g. VK_APP_SECRET not yet configured). Either way this is
+    // just a read-only "am I paid" check - actual access is only ever
+    // granted via VK's own signed payment webhook.
+    const verifiedUid = vkVerifyLaunchParams(req.body.launchParams);
+    uid = 'vk_' + (verifiedUid || String(req.body.vkUserId).replace(/^vk_/, ''));
   } else {
     const user = validateInitData(req.body.initData);
     if (!user) return res.status(401).json({ error: 'invalid initData' });
@@ -659,6 +727,46 @@ app.post('/api/yandex/verify-purchase', async (req, res) => {
   res.json({ ok: true, token: tokens[0], tokens });
 });
 
+// --- VK Mini Apps in-app payments ---
+// VK calls this URL itself (server-to-server, application/x-www-form-urlencoded)
+// to ask what an item costs and to confirm a completed purchase - the game
+// client never sees a receipt, it just polls /api/check-access afterward.
+// Configure the notification URL in VK app admin -> Оплата -> Уведомления:
+//   <PUBLIC_URL>/api/vk/payments
+// https://dev.vk.com/ru/mini-apps/payments
+function vkVerifySignature(params) {
+  if (!params.sig) return false;
+  const { sig, ...rest } = params;
+  const sorted = Object.keys(rest).sort().map((k) => `${k}=${rest[k]}`).join('');
+  const computed = crypto.createHash('md5').update(sorted + VK_PAYMENTS_SECRET).digest('hex');
+  return computed === sig;
+}
+
+app.post('/api/vk/payments', async (req, res) => {
+  const p = Object.assign({}, req.query, req.body);
+  if (!VK_PAYMENTS_SECRET) return res.json({ error: { error_code: 10, error_msg: 'payments not configured', critical: true } });
+  if (!vkVerifySignature(p)) return res.json({ error: { error_code: 10, error_msg: 'bad signature', critical: true } });
+
+  if (p.notification_type === 'get_item' || p.notification_type === 'get_item_test') {
+    if (!VK_PRODUCT_DAYS[p.item]) return res.json({ error: { error_code: 20, error_msg: 'Item not found', critical: true } });
+    return res.json({ response: { item_id: p.item, title: 'Премиум на месяц', price: VK_PREMIUM_PRICE_VOTES } });
+  }
+
+  if (p.notification_type === 'order_status_change' && p.status === 'chargeable') {
+    const days = VK_PRODUCT_DAYS[p.item];
+    if (!days) return res.json({ error: { error_code: 20, error_msg: 'Item not found', critical: true } });
+    try {
+      await markPaid('vk_' + p.user_id, 'vk_order_' + p.order_id, days);
+    } catch (e) {
+      console.error('vk payments markPaid error:', e.message);
+      return res.json({ error: { error_code: 100, error_msg: 'server error', critical: true } });
+    }
+    return res.json({ response: { order_id: Number(p.order_id), app_order_id: Number(p.order_id) } });
+  }
+
+  res.json({ response: 1 });
+});
+
 // ============================================================================
 //  SUPPORT BOT — free, no AI. Fixed FAQ answers + a live payment-status check
 //  + "leave a message for the developer". Every reply is a canned string, so
@@ -820,6 +928,93 @@ async function sendMenu(chatId, text) {
   await tgCall('sendMessage', { chat_id: chatId, text, reply_markup: MENU });
 }
 
+// When a VPN cannot reach Amvera from the Mini App, Telegram can still deliver
+// a /start deep link to the bot. The bot (running on Amvera) creates the same
+// payment as the HTTP API; the phone never calls Amvera to obtain the link.
+async function sendBotPayment(chatId, telegramId, method, isGift) {
+  let alreadyPaid = false;
+  try {
+    if (!isGift) {
+      const snap = await db.ref('paidUsers/' + telegramId).get();
+      if (snap.exists()) {
+        const record = snap.val() || {};
+        alreadyPaid = typeof record.paidUntil !== 'number' || record.paidUntil > Date.now();
+      }
+    }
+  } catch (e) {
+    console.error('Bot payment access check failed:', e);
+    return tgCall('sendMessage', { chat_id: chatId, text: 'Не удалось проверить текущий премиум. Чтобы избежать двойной оплаты, попробуй позже.' });
+  }
+  if (alreadyPaid) {
+    return tgCall('sendMessage', {
+      chat_id: chatId,
+      text: '✅ Премиум уже активен. Если игра с VPN показывает замок, проблема в связи игры с сервером, а не в оплате. Не плати повторно.',
+    });
+  }
+
+  if (method === 'stars') {
+    const result = await tgCall('sendInvoice', {
+      chat_id: chatId,
+      title: isGift ? 'Премиум в подарок другу' : 'Премиум на месяц',
+      description: isGift
+        ? 'Премиум на месяц для друга. После оплаты бот пришлёт ссылку-подарок.'
+        : 'Полный доступ ко всем рубрикам на месяц и неделя премиума другу в подарок.',
+      payload: `${isGift ? 'gift_access' : 'full_access'}_${telegramId}_${Date.now()}`,
+      provider_token: '',
+      currency: 'XTR',
+      prices: [{ label: isGift ? 'Премиум в подарок' : 'Премиум на месяц', amount: STARS_PRICE }],
+      start_parameter: 'premium',
+    });
+    if (!result.ok) await tgCall('sendMessage', { chat_id: chatId, text: 'Не получилось создать счёт Stars. Попробуй позже или напиши в поддержку.' });
+    else if (!isGift) markPending(telegramId, 'stars').catch(() => {});
+    return;
+  }
+
+  if (!TBANK_ENABLED || !TBANK_RECEIPT_EMAIL || !PUBLIC_URL) {
+    return tgCall('sendMessage', { chat_id: chatId, text: 'Оплата картой/СБП сейчас не настроена. Напиши в поддержку.' });
+  }
+  const orderId = `kino-${isGift ? 'gift-' : ''}${telegramId}-${Date.now()}`;
+  const itemName = isGift ? 'Премиум в подарок (1 месяц)' : 'Премиум на месяц';
+  let result;
+  try {
+    result = await tbankCall('Init', {
+      Amount: TBANK_PRICE_RUB * 100,
+      OrderId: orderId,
+      Description: isGift
+        ? 'Премиум в подарок другу на месяц — оплачивает даритель'
+        : 'Премиум на месяц: все рубрики, без рекламы, плюс неделя в подарок другу',
+      NotificationURL: `${PUBLIC_URL}/tbank-notification`,
+      SuccessURL: `${PUBLIC_URL}/tbank-success`,
+      FailURL: `${PUBLIC_URL}/tbank-fail`,
+      Receipt: {
+        Email: TBANK_RECEIPT_EMAIL,
+        Taxation: TBANK_TAXATION,
+        Items: [{
+          Name: itemName,
+          Price: TBANK_PRICE_RUB * 100,
+          Quantity: 1,
+          Amount: TBANK_PRICE_RUB * 100,
+          Tax: 'none',
+          PaymentMethod: 'full_payment',
+          PaymentObject: 'service',
+        }],
+      },
+    });
+  } catch (e) {
+    console.error('Bot T-Bank Init request failed:', e);
+  }
+  if (!result || !result.Success || !result.PaymentURL) {
+    if (result) console.error('Bot T-Bank Init failed:', JSON.stringify(result));
+    return tgCall('sendMessage', { chat_id: chatId, text: 'Не получилось создать ссылку на оплату картой/СБП. Попробуй позже или напиши в поддержку.' });
+  }
+  if (!isGift) markPending(telegramId, 'card').catch(() => {});
+  return tgCall('sendMessage', {
+    chat_id: chatId,
+    text: `Ссылка на оплату ${isGift ? 'подарка' : 'премиума'} картой или через СБП готова. Нажми кнопку ниже:`,
+    reply_markup: { inline_keyboard: [[{ text: '💳 Открыть страницу оплаты', url: result.PaymentURL }]] },
+  });
+}
+
 async function handleCallback(cq) {
   const data = String(cq.data || '');
   const chatId = cq.message && cq.message.chat ? cq.message.chat.id : cq.from.id;
@@ -892,6 +1087,12 @@ async function handleTextMessage(msg) {
           await tgCall('sendMessage', { chat_id: chatId, text: why });
         }
         return sendMenu(chatId, WELCOME);
+      }
+      const paymentMatch = /^pay_(stars|card)(_gift)?$/.exec(sp);
+      if (paymentMatch) {
+        _awaiting.delete(from.id);
+        if (msg.chat.type !== 'private') return sendMenu(chatId, 'Открой личный чат с ботом для оплаты.');
+        return sendBotPayment(chatId, from.id, paymentMatch[1], !!paymentMatch[2]);
       }
       if (sp.indexOf('s_') === 0) trackSource(sp.slice(2), from.id).catch(() => {});
     }
@@ -981,7 +1182,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   }
 });
 
-const VERSION = 'support-bot 2026-09-15 (monthly premium + gifting)';
+const VERSION = 'support-bot 2026-09-26 (VPN payment fallback)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT} (${VERSION})`));
