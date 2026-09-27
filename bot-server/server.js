@@ -282,6 +282,8 @@ async function claimPaymentOnce(key) {
 function giftLink(token) {
   return `https://t.me/meme_millennials_bot?start=gift_${token}`;
 }
+const GAME_URL = 'https://t.me/meme_millennials_bot/meme_game';
+const RETURN_TO_GAME = { inline_keyboard: [[{ text: '🎮 Вернуться в игру', url: GAME_URL }]] };
 function purchaseThanksText(bonusToken) {
   return (
     'Спасибо за покупку! Премиум активен на месяц 🎉 Все платные рубрики открыты, рекламы нет.\n\n' +
@@ -636,6 +638,7 @@ app.post('/tbank-notification', async (req, res) => {
           await tgCall('sendMessage', {
             chat_id: buyerId,
             text: giftReadyText(token),
+            reply_markup: RETURN_TO_GAME,
           });
         } catch (e) { /* best effort */ }
       } else if (selfMatch) {
@@ -646,6 +649,7 @@ app.post('/tbank-notification', async (req, res) => {
           await tgCall('sendMessage', {
             chat_id: telegramId,
             text: purchaseThanksText(bonusToken),
+            reply_markup: RETURN_TO_GAME,
           });
         } catch (e) { /* best effort */ }
       }
@@ -802,6 +806,7 @@ const FAQ = {
 
 const MENU = {
   inline_keyboard: [
+    [{ text: '🎮 Играть', url: GAME_URL }],
     [{ text: '📖 Как играть', callback_data: 'faq:play' }],
     [{ text: '🧩 Рубрики и полный доступ', callback_data: 'faq:rubrics' }],
     [{ text: '💳 Как оплатить', callback_data: 'faq:pay' }],
@@ -949,6 +954,7 @@ async function sendBotPayment(chatId, telegramId, method, isGift) {
     return tgCall('sendMessage', {
       chat_id: chatId,
       text: '✅ Премиум уже активен. Если игра с VPN показывает замок, проблема в связи игры с сервером, а не в оплате. Не плати повторно.',
+      reply_markup: RETURN_TO_GAME,
     });
   }
 
@@ -1071,7 +1077,7 @@ async function handleTextMessage(msg) {
             text:
               `🎉 Тебе подарили ${result.days >= 30 ? 'месяц' : 'неделю'} премиума в «Мемах Миллениалов»! ` +
               'Все платные рубрики уже открыты, реклама убрана.',
-            reply_markup: { inline_keyboard: [[{ text: '🎮 Открыть игру', url: 'https://t.me/meme_millennials_bot/meme_game' }]] },
+            reply_markup: RETURN_TO_GAME,
           });
           tgCall('sendMessage', {
             chat_id: result.fromUid,
@@ -1123,7 +1129,7 @@ async function handleTextMessage(msg) {
   );
 }
 
-// Shared update handler: polling does not rely on Telegram reaching Amvera.
+// Shared update handler for Telegram webhook requests.
 async function processTelegramUpdate(update) {
   const type = update.pre_checkout_query ? 'pre_checkout_query'
     : update.callback_query ? 'callback_query'
@@ -1148,11 +1154,11 @@ async function processTelegramUpdate(update) {
       const payload = String(sp.invoice_payload || '');
       if (payload.startsWith('gift_access_')) {
         const token = await createGiftToken(msg.from.id, 'purchased', GIFT_PURCHASED_DAYS);
-        await tgCall('sendMessage', { chat_id: msg.chat.id, text: giftReadyText(token) });
+        await tgCall('sendMessage', { chat_id: msg.chat.id, text: giftReadyText(token), reply_markup: RETURN_TO_GAME });
       } else {
         await markPaid(msg.from.id, sp.telegram_payment_charge_id);
         const bonusToken = await createGiftToken(msg.from.id, 'bonus', GIFT_BONUS_DAYS);
-        await tgCall('sendMessage', { chat_id: msg.chat.id, text: purchaseThanksText(bonusToken) });
+        await tgCall('sendMessage', { chat_id: msg.chat.id, text: purchaseThanksText(bonusToken), reply_markup: RETURN_TO_GAME });
       }
       return;
     }
@@ -1184,54 +1190,47 @@ async function processTelegramUpdate(update) {
   }
 }
 
-// Keep the old endpoint available during rollout; polling removes its webhook.
 app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   const update = req.body;
   res.sendStatus(200);
   await processTelegramUpdate(update);
 });
 
-const VERSION = 'support-bot 2026-09-26 (Telegram polling + VPN payment fallback)';
+const VERSION = 'support-bot 2026-09-26 (Amvera webhook + game buttons)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
-async function pollTelegramUpdates() {
-  // getUpdates and a webhook cannot run at the same time. Preserve queued
-  // messages and payments while switching delivery modes.
-  const removed = await tgCall('deleteWebhook', {
-    drop_pending_updates: false,
-  });
-  if (!removed.ok) {
-    console.error('Telegram polling could not start: deleteWebhook failed');
-    setTimeout(pollTelegramUpdates, 5000);
+async function ensureAmveraWebhook() {
+  let target;
+  try {
+    const base = new URL(PUBLIC_URL);
+    if (base.protocol !== 'https:' || !base.hostname.endsWith('.amvera.io')) {
+      console.error('Telegram webhook not changed: PUBLIC_URL must be an Amvera HTTPS address');
+      return;
+    }
+    target = new URL(`/webhook/${WEBHOOK_SECRET}`, base).toString();
+  } catch (e) {
+    console.error('Telegram webhook not changed: invalid PUBLIC_URL');
     return;
   }
-  console.log('Telegram webhook removed; polling started');
-  let offset = 0;
-  for (;;) {
-    const batch = await tgCall('getUpdates', {
-      offset,
-      limit: 50,
-      timeout: 20,
-      allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
-    });
-    if (!batch.ok || !Array.isArray(batch.result)) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      continue;
-    }
-    for (const update of batch.result) {
-      await processTelegramUpdate(update);
-      offset = Math.max(offset, update.update_id + 1);
-    }
+
+  const current = await tgCall('getWebhookInfo', {});
+  if (!current.ok) {
+    console.error('Telegram webhook status could not be checked');
+    return;
   }
+  if (current.result && current.result.url === target) {
+    console.log('Telegram webhook already points to Amvera');
+    return;
+  }
+  const updated = await tgCall('setWebhook', {
+    url: target,
+    drop_pending_updates: false,
+  });
+  if (updated.ok) console.log('Telegram webhook switched to Amvera');
+  else console.error('Telegram webhook could not be switched to Amvera');
 }
 
 app.listen(PORT, () => {
   console.log(`Listening on port ${PORT} (${VERSION})`);
-  const startPolling = () => {
-    pollTelegramUpdates().catch((e) => {
-      console.error('Telegram polling stopped; retrying:', e);
-      setTimeout(startPolling, 3000);
-    });
-  };
-  startPolling();
+  ensureAmveraWebhook().catch((e) => console.error('Telegram webhook setup failed:', e));
 });
