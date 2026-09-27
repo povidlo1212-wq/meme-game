@@ -1199,6 +1199,25 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
 const VERSION = 'support-bot 2026-09-26 (Amvera webhook + game buttons)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
+let lastWebhookDiagnostics = '';
+function logWebhookDiagnostics(info, target) {
+  const safeError = String(info.last_error_message || '')
+    .replaceAll(BOT_TOKEN, '[redacted]')
+    .replaceAll(WEBHOOK_SECRET, '[redacted]')
+    .replace(/https?:\/\/\S+/g, '[url]');
+  const diagnostics = JSON.stringify({
+    urlMatchesAmvera: info.url === target,
+    pendingUpdates: info.pending_update_count || 0,
+    lastErrorAt: info.last_error_date || null,
+    lastError: safeError || null,
+    allowedUpdates: info.allowed_updates || null,
+  });
+  if (diagnostics !== lastWebhookDiagnostics) {
+    console.log('Telegram webhook diagnostics:', diagnostics);
+    lastWebhookDiagnostics = diagnostics;
+  }
+}
+
 async function ensureAmveraWebhook() {
   let target;
   try {
@@ -1218,16 +1237,28 @@ async function ensureAmveraWebhook() {
     console.error('Telegram webhook status could not be checked');
     return;
   }
-  if (current.result && current.result.url === target) {
+  logWebhookDiagnostics(current.result || {}, target);
+  const subscribed = current.result && current.result.allowed_updates;
+  const requiredUpdates = ['message', 'callback_query', 'pre_checkout_query'];
+  const missingUpdates = Array.isArray(subscribed)
+    ? requiredUpdates.some((type) => !subscribed.includes(type))
+    : false;
+  if (current.result && current.result.url === target && !missingUpdates) {
     console.log('Telegram webhook already points to Amvera');
-    return;
+  } else {
+    const updated = await tgCall('setWebhook', {
+      url: target,
+      drop_pending_updates: false,
+      allowed_updates: requiredUpdates,
+    });
+    if (updated.ok) console.log('Telegram webhook switched to Amvera');
+    else console.error('Telegram webhook could not be switched to Amvera');
   }
-  const updated = await tgCall('setWebhook', {
-    url: target,
-    drop_pending_updates: false,
-  });
-  if (updated.ok) console.log('Telegram webhook switched to Amvera');
-  else console.error('Telegram webhook could not be switched to Amvera');
+  const timer = setInterval(async () => {
+    const status = await tgCall('getWebhookInfo', {});
+    if (status.ok) logWebhookDiagnostics(status.result || {}, target);
+  }, 60000);
+  timer.unref();
 }
 
 app.listen(PORT, () => {
