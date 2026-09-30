@@ -13,6 +13,9 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT;
 const FIREBASE_SERVICE_ACCOUNT_B64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
 const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL;
+const DB_BACKEND = process.env.DB_BACKEND || 'firebase';
+const SQLITE_DB_PATH = process.env.SQLITE_DB_PATH || '/data/meme-game.sqlite';
+const SERVER_TIMESTAMP = { '.sv': 'timestamp' };
 const STARS_PRICE = parseInt(process.env.STARS_PRICE || '100', 10);
 const PORT = process.env.PORT || 3000;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || '*')
@@ -61,34 +64,53 @@ const VK_APP_SECRET = process.env.VK_APP_SECRET || '';
 // support message / bug report players send. Get it from @userinfobot.
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || '';
 
-for (const [name, val] of Object.entries({
+if (!['firebase', 'sqlite'].includes(DB_BACKEND)) {
+  console.error('DB_BACKEND must be firebase or sqlite');
+  process.exit(1);
+}
+
+const requiredEnv = {
   BOT_TOKEN,
   WEBHOOK_SECRET,
-  FIREBASE_SERVICE_ACCOUNT: FIREBASE_SERVICE_ACCOUNT || FIREBASE_SERVICE_ACCOUNT_B64,
-  FIREBASE_DATABASE_URL,
-})) {
+};
+if (DB_BACKEND === 'firebase') {
+  requiredEnv.FIREBASE_SERVICE_ACCOUNT = FIREBASE_SERVICE_ACCOUNT || FIREBASE_SERVICE_ACCOUNT_B64;
+  requiredEnv.FIREBASE_DATABASE_URL = FIREBASE_DATABASE_URL;
+}
+for (const [name, val] of Object.entries(requiredEnv)) {
   if (!val) {
     console.error(`Missing required env var: ${name}`);
     process.exit(1);
   }
 }
 
-let serviceAccount;
-try {
-  const rawServiceAccount = FIREBASE_SERVICE_ACCOUNT_B64
-    ? Buffer.from(FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8')
-    : FIREBASE_SERVICE_ACCOUNT;
-  serviceAccount = JSON.parse(rawServiceAccount);
-} catch (e) {
-  console.error('Firebase service account is not valid JSON/Base64:', e.message);
-  process.exit(1);
+let db;
+async function initializeStorage() {
+  if (DB_BACKEND === 'sqlite') {
+    const { openSqliteStore } = require('./sqlite-store');
+    db = await openSqliteStore(SQLITE_DB_PATH, { requireExisting: true });
+    if (!(await db.ref('paidUsers').get()).exists()) {
+      throw new Error('SQLite database has no paidUsers; refusing to start without payment history');
+    }
+    console.log('SQLite storage ready');
+    return;
+  }
+  let serviceAccount;
+  try {
+    const rawServiceAccount = FIREBASE_SERVICE_ACCOUNT_B64
+      ? Buffer.from(FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8')
+      : FIREBASE_SERVICE_ACCOUNT;
+    serviceAccount = JSON.parse(rawServiceAccount);
+  } catch (e) {
+    throw new Error('Firebase service account is not valid JSON/Base64: ' + e.message);
+  }
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: FIREBASE_DATABASE_URL,
+  });
+  db = admin.database();
+  console.log('Firebase storage ready');
 }
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: FIREBASE_DATABASE_URL,
-});
-const db = admin.database();
 
 const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -190,7 +212,7 @@ async function markPaid(telegramId, chargeId, days) {
   days = days || PREMIUM_DAYS;
   try {
     await db.ref('paidUsers/' + telegramId).set({
-      paidAt: admin.database.ServerValue.TIMESTAMP,
+      paidAt: SERVER_TIMESTAMP,
       paidUntil: Date.now() + days * DAY_MS,
       chargeId: chargeId || null,
     });
@@ -254,7 +276,7 @@ async function claimGiftToken(token, toUid) {
     const stillActive = prev && typeof prev.paidUntil === 'number' && prev.paidUntil > Date.now();
     const base = stillActive ? prev.paidUntil : Date.now();
     await db.ref('paidUsers/' + toUid).set({
-      paidAt: (prev && prev.paidAt) || admin.database.ServerValue.TIMESTAMP,
+      paidAt: (prev && prev.paidAt) || SERVER_TIMESTAMP,
       paidUntil: base + days * DAY_MS,
       chargeId: (prev && prev.chargeId) || null,
       giftFrom: data.fromUid,
@@ -305,7 +327,7 @@ async function markPending(telegramId, method) {
   try {
     await db.ref('pendingPayments/' + telegramId).set({
       method: method,
-      startedAt: admin.database.ServerValue.TIMESTAMP,
+      startedAt: SERVER_TIMESTAMP,
     });
   } catch (e) {
     console.error('markPending error:', e.message);
@@ -372,7 +394,7 @@ async function trackSource(src, uid, profile) {
     const firstRef = db.ref('sourceFirstTouch/' + uid);
     const snap = await firstRef.get();
     if (!snap.exists()) {
-      await firstRef.set({ src, at: admin.database.ServerValue.TIMESTAMP });
+      await firstRef.set({ src, at: SERVER_TIMESTAMP });
       await db.ref('sources/' + src + '/users/' + uid).set(true);
       await db.ref('sources/' + src + '/total').transaction((n) => (n || 0) + 1);
     }
@@ -882,7 +904,7 @@ async function logSupport(fromUser, text, kind) {
       u: fromUser.username || fromUser.first_name || '',
       kind: kind || 'msg',
       q: String(text || '').slice(0, 2000),
-      ts: admin.database.ServerValue.TIMESTAMP,
+      ts: SERVER_TIMESTAMP,
     });
   } catch (e) {
     console.error('logSupport error:', e.message);
@@ -1241,11 +1263,14 @@ async function pollTelegramUpdates() {
   }
 }
 
-app.listen(PORT, () => {
+initializeStorage().then(() => app.listen(PORT, () => {
   console.log(`Listening on port ${PORT} (${VERSION})`);
   const startPolling = () => pollTelegramUpdates().catch((e) => {
     console.error('Telegram polling stopped; retrying:', e);
     setTimeout(startPolling, 3000);
   });
   startPolling();
+})).catch((error) => {
+  console.error('Storage startup failed:', error.message);
+  process.exit(1);
 });
