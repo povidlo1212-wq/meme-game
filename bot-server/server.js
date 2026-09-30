@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const assert = require('node:assert/strict');
 const express = require('express');
 const admin = require('firebase-admin');
 
@@ -15,6 +17,7 @@ const FIREBASE_SERVICE_ACCOUNT_B64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64;
 const FIREBASE_DATABASE_URL = process.env.FIREBASE_DATABASE_URL;
 const DB_BACKEND = process.env.DB_BACKEND || 'firebase';
 const SQLITE_DB_PATH = process.env.SQLITE_DB_PATH || '/data/meme-game.sqlite';
+const SQLITE_BOOTSTRAP_FROM_FIREBASE = process.env.SQLITE_BOOTSTRAP_FROM_FIREBASE === '1';
 const SERVER_TIMESTAMP = { '.sv': 'timestamp' };
 const STARS_PRICE = parseInt(process.env.STARS_PRICE || '100', 10);
 const PORT = process.env.PORT || 3000;
@@ -73,7 +76,7 @@ const requiredEnv = {
   BOT_TOKEN,
   WEBHOOK_SECRET,
 };
-if (DB_BACKEND === 'firebase') {
+if (DB_BACKEND === 'firebase' || SQLITE_BOOTSTRAP_FROM_FIREBASE) {
   requiredEnv.FIREBASE_SERVICE_ACCOUNT = FIREBASE_SERVICE_ACCOUNT || FIREBASE_SERVICE_ACCOUNT_B64;
   requiredEnv.FIREBASE_DATABASE_URL = FIREBASE_DATABASE_URL;
 }
@@ -85,16 +88,7 @@ for (const [name, val] of Object.entries(requiredEnv)) {
 }
 
 let db;
-async function initializeStorage() {
-  if (DB_BACKEND === 'sqlite') {
-    const { openSqliteStore } = require('./sqlite-store');
-    db = await openSqliteStore(SQLITE_DB_PATH, { requireExisting: true });
-    if (!(await db.ref('paidUsers').get()).exists()) {
-      throw new Error('SQLite database has no paidUsers; refusing to start without payment history');
-    }
-    console.log('SQLite storage ready');
-    return;
-  }
+function initializeFirebase() {
   let serviceAccount;
   try {
     const rawServiceAccount = FIREBASE_SERVICE_ACCOUNT_B64
@@ -108,7 +102,38 @@ async function initializeStorage() {
     credential: admin.credential.cert(serviceAccount),
     databaseURL: FIREBASE_DATABASE_URL,
   });
-  db = admin.database();
+  return admin.database();
+}
+async function initializeStorage() {
+  if (DB_BACKEND === 'sqlite') {
+    const { openSqliteStore } = require('./sqlite-store');
+    if (!fs.existsSync(SQLITE_DB_PATH) && SQLITE_BOOTSTRAP_FROM_FIREBASE) {
+      // The old bot is stopped before this process starts. Copy its most recent
+      // payment history directly inside Amvera, then verify before listening.
+      const source = initializeFirebase();
+      const snapshot = await source.ref('/').get();
+      const data = snapshot.val();
+      if (!data || !data.paidUsers) throw new Error('Firebase export has no paidUsers; aborting cutover');
+      const stagingPath = SQLITE_DB_PATH + '.import-' + Date.now();
+      const staging = await openSqliteStore(stagingPath);
+      try {
+        await staging.ref('').set(data);
+        assert.deepStrictEqual((await staging.ref('').get()).val(), data);
+      } finally {
+        staging.close();
+      }
+      fs.renameSync(stagingPath, SQLITE_DB_PATH);
+      console.log('Firebase data imported and verified in SQLite');
+      await admin.app().delete();
+    }
+    db = await openSqliteStore(SQLITE_DB_PATH, { requireExisting: true });
+    if (!(await db.ref('paidUsers').get()).exists()) {
+      throw new Error('SQLite database has no paidUsers; refusing to start without payment history');
+    }
+    console.log('SQLite storage ready');
+    return;
+  }
+  db = initializeFirebase();
   console.log('Firebase storage ready');
 }
 
@@ -1218,7 +1243,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   await processTelegramUpdate(update);
 });
 
-const VERSION = 'support-bot 2026-09-27 (Telegram polling + game buttons)';
+const VERSION = 'support-bot 2026-09-30 (Telegram polling + SQLite-ready)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
 async function pollTelegramUpdates() {
