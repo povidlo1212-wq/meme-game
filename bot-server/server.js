@@ -445,6 +445,130 @@ app.post('/api/track', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Game discovery is short-lived presence data, not payment history. Keep it in
+// this single Amvera process; hosts refresh their room every 25 seconds, so a
+// restart repopulates the list without adding constant writes to SQLite.
+const gameRooms = new Map();
+const GAME_ROOM_TTL_MS = 150000;
+function pruneGameRooms() {
+  const now = Date.now();
+  for (const [code, room] of gameRooms) {
+    if (now - room.updatedAt > GAME_ROOM_TTL_MS) gameRooms.delete(code);
+  }
+}
+
+app.get('/api/game/rooms', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  pruneGameRooms();
+  const code = String(req.query.code || '');
+  if (code) {
+    if (!/^\d{4}$/.test(code)) return res.status(400).json({ error: 'invalid code' });
+    return res.json({ alive: gameRooms.has(code) });
+  }
+  const now = Date.now();
+  const rooms = [];
+  for (const [roomCode, room] of gameRooms) {
+    if (room.isOpen && now - room.updatedAt < 90000) {
+      rooms.push({ code: roomCode, category: room.category, phase: room.phase, playerCount: room.playerCount });
+    }
+  }
+  res.json({ rooms });
+});
+
+app.post('/api/game/rooms', (req, res) => {
+  const { code, key, action, category, phase, isOpen, playerCount } = req.body || {};
+  if (typeof code !== 'string' || !/^\d{4}$/.test(code) ||
+      typeof key !== 'string' || !/^[a-f0-9]{32}$/.test(key)) {
+    return res.status(400).json({ error: 'invalid room credentials' });
+  }
+  pruneGameRooms();
+  const previous = gameRooms.get(code);
+  if (previous && previous.key !== key) return res.status(409).json({ error: 'room code in use' });
+  if (action === 'remove') {
+    gameRooms.delete(code);
+    return res.json({ ok: true });
+  }
+  if (action !== 'upsert' || typeof category !== 'string' || !/^[a-z-]{1,32}$/.test(category) ||
+      typeof phase !== 'string' || !/^[a-z-]{1,32}$/.test(phase) ||
+      typeof isOpen !== 'boolean' || !Number.isInteger(playerCount) || playerCount < 0 || playerCount > 100) {
+    return res.status(400).json({ error: 'invalid room data' });
+  }
+  if (!previous && gameRooms.size >= 500) return res.status(503).json({ error: 'room capacity reached' });
+  gameRooms.set(code, { key, category, phase, isOpen, playerCount, updatedAt: Date.now() });
+  res.json({ ok: true });
+});
+
+// The initial SQLite import copied old scores, but the previous game client
+// continued writing to Firebase. Merge its newer scores during the migration
+// while the old service-account variables remain available on Amvera.
+async function mergeFirebasePlayers() {
+  if (DB_BACKEND !== 'sqlite' || !SQLITE_BOOTSTRAP_FROM_FIREBASE) return;
+  try {
+    const source = initializeFirebase();
+    const latest = (await source.ref('players').get()).val() || {};
+    const current = (await db.ref('players').get()).val() || {};
+    const merged = Object.assign(Object.create(null), current);
+    let changed = 0;
+    for (const [pid, player] of Object.entries(latest)) {
+      if (!/^[a-zA-Z0-9_-]{6,64}$/.test(pid) || !player || typeof player !== 'object') continue;
+      if (!merged[pid] || Number(player.updatedAt || 0) > Number(merged[pid].updatedAt || 0)) {
+        merged[pid] = player;
+        changed++;
+      }
+    }
+    if (changed) await db.ref('players').set(merged);
+    console.log(`Firebase leaderboard merge complete: ${changed} newer player records`);
+  } catch (error) {
+    console.error('Firebase leaderboard merge failed:', error.message);
+  } finally {
+    if (admin.apps.length) await admin.app().delete().catch(() => {});
+  }
+}
+
+let leaderboardSyncPromise = Promise.resolve();
+app.get('/api/game/leaderboard', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    await leaderboardSyncPromise;
+    const players = (await db.ref('players').get()).val() || {};
+    const list = Object.entries(players)
+      .filter(([pid, player]) => /^[a-zA-Z0-9_-]{6,64}$/.test(pid) && player && typeof player === 'object')
+      .map(([pid, player]) => ({
+        pid,
+        nick: String(player.nick || '').slice(0, 60),
+        matches: Number(player.matches) || 0,
+        matchWins: Number(player.matchWins) || 0,
+        games: Number(player.games) || 0,
+        wins: Number(player.wins) || 0,
+      }))
+      .sort((a, b) => b.matchWins - a.matchWins || b.matches - a.matches)
+      .slice(0, 50);
+    res.json({ players: list });
+  } catch (error) {
+    console.error('game leaderboard read failed:', error.message);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
+app.post('/api/game/leaderboard', async (req, res) => {
+  const { pid, nick, matches, matchWins, games, wins } = req.body || {};
+  const counts = [matches, matchWins, games, wins];
+  if (typeof pid !== 'string' || !/^[a-zA-Z0-9_-]{6,64}$/.test(pid) ||
+      typeof nick !== 'string' || !nick.trim() || nick.length > 60 || /[\x00-\x1f<>]/.test(nick) ||
+      !counts.every((n) => Number.isInteger(n) && n >= 0 && n <= 1000000) ||
+      matchWins > matches || wins > games) {
+    return res.status(400).json({ error: 'invalid player data' });
+  }
+  try {
+    await leaderboardSyncPromise;
+    await db.ref('players/' + pid).set({ nick: nick.trim(), matches, matchWins, games, wins, updatedAt: Date.now() });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('game leaderboard write failed:', error.message);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 // Simple stats readout: /_stats?token=<WEBHOOK_SECRET>
 app.get('/_stats', async (req, res) => {
   if (req.query.token !== WEBHOOK_SECRET) return res.status(403).send('forbidden');
@@ -1243,7 +1367,7 @@ app.post(`/webhook/${WEBHOOK_SECRET}`, async (req, res) => {
   await processTelegramUpdate(update);
 });
 
-const VERSION = 'support-bot 2026-09-30 (Telegram polling + SQLite-ready)';
+const VERSION = 'support-bot 2026-09-30 (Telegram polling + Amvera game data API)';
 app.get('/', (req, res) => res.send('meme-game-bot-server is running (' + VERSION + ')'));
 
 async function pollTelegramUpdates() {
@@ -1288,14 +1412,19 @@ async function pollTelegramUpdates() {
   }
 }
 
-initializeStorage().then(() => app.listen(PORT, () => {
-  console.log(`Listening on port ${PORT} (${VERSION})`);
-  const startPolling = () => pollTelegramUpdates().catch((e) => {
-    console.error('Telegram polling stopped; retrying:', e);
-    setTimeout(startPolling, 3000);
+if (require.main === module) {
+  initializeStorage().then(() => app.listen(PORT, () => {
+    console.log(`Listening on port ${PORT} (${VERSION})`);
+    leaderboardSyncPromise = mergeFirebasePlayers();
+    const startPolling = () => pollTelegramUpdates().catch((e) => {
+      console.error('Telegram polling stopped; retrying:', e);
+      setTimeout(startPolling, 3000);
+    });
+    startPolling();
+  })).catch((error) => {
+    console.error('Storage startup failed:', error.message);
+    process.exit(1);
   });
-  startPolling();
-})).catch((error) => {
-  console.error('Storage startup failed:', error.message);
-  process.exit(1);
-});
+}
+
+module.exports = { app, initializeStorage };
