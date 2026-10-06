@@ -62,10 +62,12 @@ function createRealtimeRouter(validateInitData) {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-store',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     });
     res.flushHeaders();
     session.response = res;
-    res.write(': connected\n\n');
+    // Send enough initial bytes for proxies that buffer very small chunks.
+    res.write(`: connected ${' '.repeat(2048)}\n\n`);
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 20000);
     heartbeat.unref();
     res.on('close', () => {

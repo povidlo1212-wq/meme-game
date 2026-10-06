@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка связи с Amvera</title>
+<style>
+body{font:14px/1.5 -apple-system,system-ui,sans-serif;background:#10131c;color:#e8ecf5;margin:0;padding:16px}
+button{font:inherit;padding:12px 16px;border:0;border-radius:10px;background:#4c8dff;color:white;margin:4px 6px 12px 0}
+button:disabled{opacity:.5}
+pre{white-space:pre-wrap;word-break:break-word;background:#1a1f2d;padding:12px;border-radius:10px;font:12px/1.45 ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<h3>Проверка связи с Amvera</h3>
+<p>Открой эту страницу в Safari на iPhone с включённым VPN. Нажми «Запустить», затем «Копировать». Проверка не отправляет данные игры и не делает покупок.</p>
+<button id="run">Запустить</button><button id="copy">Копировать</button>
+<pre id="out">Ожидание…</pre>
+<script>
+(function () {
+  var BASE = 'https://memy-millenialov-marco.amvera.io';
+  var out = document.getElementById('out');
+  var runButton = document.getElementById('run');
+  var lines = [];
+  var badEnv = false;
+  function log(text) { lines.push(text); out.textContent = lines.join('\n'); }
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () { reject(new Error('timeout ' + ms + ' мс')); }, ms);
+      Promise.resolve(promise).then(
+        function (value) { clearTimeout(timer); resolve(value); },
+        function (error) { clearTimeout(timer); reject(error); }
+      );
+    });
+  }
+  function markEnvironmentError(error) {
+    if (/DataCloneError|postMessage|AbortSignal/.test(String(error))) badEnv = true;
+  }
+  async function timed(url, options, timeoutMs) {
+    var start = Date.now();
+    try {
+      var response = await withTimeout(Promise.resolve().then(function () {
+        return fetch(url, Object.assign({ cache: 'no-store' }, options || {}));
+      }), timeoutMs || 15000);
+      return { received: true, ms: Date.now() - start, status: response.status, type: response.type };
+    } catch (error) {
+      markEnvironmentError(error);
+      return { received: false, ms: Date.now() - start, error: error.name + ': ' + error.message };
+    }
+  }
+  function format(result) {
+    return result.received
+      ? 'ОТВЕТ ' + result.ms + ' мс (HTTP ' + result.status + ', ' + result.type + ')'
+      : 'СБОЙ ' + result.ms + ' мс — ' + result.error;
+  }
+  async function stream(id) {
+    var start = Date.now();
+    var reader;
+    try {
+      var response = await withTimeout(Promise.resolve().then(function () {
+        return fetch(BASE + '/api/diag/stream?id=' + id, { cache: 'no-store' });
+      }), 15000);
+      if (!response.ok || !/text\/event-stream/i.test(response.headers.get('Content-Type') || '')) {
+        return 'СБОЙ: HTTP ' + response.status + ', ответ не является потоком';
+      }
+      if (!response.body || !response.body.getReader) return 'СБОЙ: браузер не поддерживает чтение потока';
+      reader = response.body.getReader();
+      var chunks = [];
+      while (true) {
+        var part = await withTimeout(reader.read(), 15000);
+        if (part.done) break;
+        chunks.push(Date.now() - start);
+      }
+      return 'ОТВЕТ, частей: ' + chunks.length + ', время (мс): ' + chunks.join(', ') +
+        (chunks.length > 2 && chunks[chunks.length - 1] - chunks[0] < 1500 ? ' — возможно, буферизация' : '');
+    } catch (error) {
+      markEnvironmentError(error);
+      try { if (reader) await reader.cancel(); } catch (_) {}
+      return 'СБОЙ ' + (Date.now() - start) + ' мс — ' + error.name + ': ' + error.message;
+    }
+  }
+  async function run() {
+    runButton.disabled = true;
+    lines = [];
+    badEnv = false;
+    var id = Math.random().toString(36).slice(2, 10);
+    try {
+      log('id=' + id + '  ' + new Date().toISOString());
+      log('Браузер: ' + navigator.userAgent);
+      log('Сеть: online=' + navigator.onLine + (navigator.connection ? ', type=' + (navigator.connection.effectiveType || '?') : ''));
+      log('Страница GitHub Pages загружена. Проверяем только соединение с Amvera.');
+      log('\n[Amvera]');
+      var normal = await timed(BASE + '/api/diag/ping?id=' + id);
+      log('1. Обычный запрос: ' + format(normal));
+      var opaque = await timed(BASE + '/api/diag/ping?id=' + id + 'n', { mode: 'no-cors' });
+      log('2. Запрос без чтения ответа: ' + format(opaque));
+      log('3. Запрос с предварительной проверкой: ' + format(await timed(BASE + '/api/diag/ping?id=' + id + 'p', { headers: { Authorization: 'Bearer test' } })));
+      log('4. Рейтинг: ' + format(await timed(BASE + '/api/game/leaderboard?id=' + id, {}, 20000)));
+      log('5. Поток: ' + await stream(id));
+      log('\n[Вывод]');
+      if (badEnv) log('ТЕСТ НЕДЕЙСТВИТЕЛЕН: среда не выполнила fetch. Открой страницу в Safari на iPhone, не внутри Claude.');
+      else {
+        if (!/iPhone|iPad|Android/.test(navigator.userAgent)) log('ВНИМАНИЕ: это не телефон. Для проверки нужен iPhone с VPN.');
+        if (normal.received) log('Читаемый HTTP-ответ от Amvera получен. Смотри статус и пункты 3–5.');
+        else if (opaque.received) log('До адреса пришёл ответ, но обычный запрос не читается: возможны CORS или ошибка входного узла без CORS-заголовка.');
+        else log('Ответа ни на один запрос нет. Возможны сеть/TLS или ошибка входного узла; сверь id со строками [http] в логе Amvera.');
+      }
+    } finally { runButton.disabled = false; }
+  }
+  runButton.onclick = run;
+  document.getElementById('copy').onclick = function () {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(lines.join('\n')).catch(function () { alert('Не удалось скопировать. Сделай скрин результата.'); });
+    } else alert('Не удалось скопировать. Сделай скрин результата.');
+  };
+})();
+</script>
+</body>
+</html>

@@ -143,6 +143,17 @@ const app = express();
 app.use(express.json());
 // VK's payment-notification callbacks arrive as application/x-www-form-urlencoded.
 app.use(express.urlencoded({ extended: true }));
+// Log game and diagnostic requests, including preflight, without IP addresses, query strings or tokens.
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/game/') && !req.path.startsWith('/api/diag/')) return next();
+  const started = Date.now();
+  const id = String(req.query.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
+  const origin = String(req.get('Origin') || '-').slice(0, 60);
+  res.on('finish', () => {
+    console.log(`[http] ${req.method} ${req.path} -> ${res.statusCode} ${Date.now() - started}ms origin=${origin}${id ? ` id=${id}` : ''}`);
+  });
+  next();
+});
 app.use((req, res, next) => {
   const requestOrigin = req.get('Origin');
   if (ALLOWED_ORIGINS.includes('*')) {
@@ -153,8 +164,33 @@ app.use((req, res, next) => {
   }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.header('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
+});
+
+// Anonymous connectivity probes. They never read or write game data.
+let diagStreams = 0;
+app.get('/api/diag/ping', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ ok: true, t: Date.now() });
+});
+app.get('/api/diag/stream', (req, res) => {
+  if (diagStreams >= 10) return res.status(429).json({ error: 'busy' });
+  diagStreams++;
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+  res.write(`: ${' '.repeat(2048)}\n\n`);
+  let n = 0;
+  const timer = setInterval(() => {
+    n++;
+    res.write(`data: ${JSON.stringify({ n, t: Date.now() })}\n\n`);
+    if (n >= 5) { clearInterval(timer); res.end(); }
+  }, 1000);
+  res.on('close', () => { clearInterval(timer); diagStreams--; });
 });
 
 // --- Telegram WebApp initData validation ---
@@ -533,7 +569,8 @@ let leaderboardSyncPromise = Promise.resolve();
 app.get('/api/game/leaderboard', async (_req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
-    await leaderboardSyncPromise;
+    // A slow Firebase import must not hold a game request until ingress timeout.
+    await Promise.race([leaderboardSyncPromise, new Promise((resolve) => setTimeout(resolve, 3000))]);
     const players = (await db.ref('players').get()).val() || {};
     const list = Object.entries(players)
       .filter(([pid, player]) => /^[a-zA-Z0-9_-]{6,64}$/.test(pid) && player && typeof player === 'object')
