@@ -28,6 +28,28 @@ test('Telegram test link enables both routes while normal launch stays unchanged
   assert.deepEqual(evaluate('', '', '#tgWebAppStartParam=ru_test'), [true, true]);
 });
 
+test('leaderboard shows whether the Amvera request failed in test mode', async () => {
+  const begin = html.indexOf('function renderLeaderboard(){');
+  const end = html.indexOf('function syncLeaderboard(', begin);
+  assert.ok(begin >= 0 && end > begin);
+  const children = [];
+  const el = { innerHTML: '', appendChild(child) { children.push(child); } };
+  const context = {
+    GAME_LEADERBOARD_API_TEST: true,
+    document: {
+      getElementById() { return el; },
+      createElement() { return { style: {}, textContent: '' }; }
+    },
+    fetchBackend() { return Promise.reject(new TypeError('Failed to fetch')); }
+  };
+  vm.createContext(context);
+  vm.runInContext(html.slice(begin, end), context);
+  context.renderLeaderboard();
+  await new Promise(setImmediate);
+  assert.match(el.innerHTML, /Не удалось загрузить рейтинг/);
+  assert.match(children[0].textContent, /Тест Amvera: Failed to fetch/);
+});
+
 function makeClient(testMode) {
   const requests = [];
   const storage = new Map();
