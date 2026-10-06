@@ -551,6 +551,9 @@ app.get('/api/game/leaderboard', async (_req, res) => {
 });
 
 app.post('/api/game/leaderboard', async (req, res) => {
+  if (!validateInitData(req.body && req.body.initData)) {
+    return res.status(401).json({ error: 'invalid initData' });
+  }
   const { pid, nick, matches, matchWins, games, wins } = req.body || {};
   const counts = [matches, matchWins, games, wins];
   if (typeof pid !== 'string' || !/^[a-zA-Z0-9_-]{6,64}$/.test(pid) ||

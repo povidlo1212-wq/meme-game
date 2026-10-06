@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { once } = require('node:events');
 const { openSqliteStore } = require('./sqlite-store');
 
@@ -41,9 +42,17 @@ test('game leaderboard and room discovery use local storage without Firebase', a
 
     const p1 = { pid: 'player123', nick: 'Первый', matches: 5, matchWins: 3, games: 12, wins: 7 };
     const p2 = { pid: 'player456', nick: 'Второй', matches: 8, matchWins: 5, games: 15, wins: 9 };
-    assert.equal((await post('/api/game/leaderboard', p1)).status, 200);
-    assert.equal((await post('/api/game/leaderboard', p2)).status, 200);
-    assert.equal((await post('/api/game/leaderboard', { ...p1, nick: '<script>' })).status, 400);
+    const authDate = String(Math.floor(Date.now() / 1000));
+    const user = JSON.stringify({ id: 123 });
+    const check = `auth_date=${authDate}\nuser=${user}`;
+    const secret = crypto.createHmac('sha256', 'WebAppData').update('test-token').digest();
+    const hash = crypto.createHmac('sha256', secret).update(check).digest('hex');
+    const initData = new URLSearchParams({ auth_date: authDate, user, hash }).toString();
+    assert.equal((await post('/api/game/leaderboard', p1)).status, 401);
+    assert.equal((await post('/api/game/leaderboard', { ...p1, initData: 'forged' })).status, 401);
+    assert.equal((await post('/api/game/leaderboard', { ...p1, initData })).status, 200);
+    assert.equal((await post('/api/game/leaderboard', { ...p2, initData })).status, 200);
+    assert.equal((await post('/api/game/leaderboard', { ...p1, nick: '<script>', initData })).status, 400);
     const players = (await (await fetch(base + '/api/game/leaderboard')).json()).players;
     assert.equal(players.length, 2);
     assert.equal(players[0].pid, 'player456');
