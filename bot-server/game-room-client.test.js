@@ -10,6 +10,35 @@ const end = html.indexOf("var COVER_URL=", start);
 assert.ok(start >= 0 && end > start);
 const roomClient = html.slice(start, end);
 
+test('Firebase does not initialize when both game-data routes use Amvera', () => {
+  const begin = html.indexOf('function initFirebase(){');
+  const end = html.indexOf('\ninitFirebase();', begin);
+  assert.ok(begin >= 0 && end > begin);
+  const source = html.slice(begin, end);
+  function run(roomsApi, leaderboardApi) {
+    let starts = 0;
+    const firebase = {
+      initializeApp() { starts++; return {}; },
+      database() { return {}; },
+      auth() { return { signInAnonymously() { return Promise.resolve(); } }; }
+    };
+    const context = {
+      GAME_ROOMS_API_TEST: roomsApi,
+      GAME_LEADERBOARD_API_TEST: leaderboardApi,
+      fbApp: null,
+      fbDB: null,
+      firebaseConfig: {},
+      firebase,
+      console
+    };
+    vm.createContext(context);
+    vm.runInContext(source, context);
+    return { result: context.initFirebase(), starts };
+  }
+  assert.deepEqual(run(true, true), { result: false, starts: 0 });
+  assert.deepEqual(run(false, false), { result: true, starts: 1 });
+});
+
 test('Telegram test link enables both routes while normal launch stays unchanged', () => {
   const flagStart = html.indexOf('var GAME_DATA_API_TEST=');
   const flagEnd = html.indexOf('function leaderboardEscape(', flagStart);
