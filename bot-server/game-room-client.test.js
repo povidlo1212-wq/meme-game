@@ -46,15 +46,16 @@ test('Telegram test link enables both routes while normal launch stays unchanged
   const flags = html.slice(flagStart, flagEnd);
   function evaluate(search, startParam, hash = '') {
     const Telegram = { WebApp: { initDataUnsafe: { start_param: startParam } } };
-    const context = { location: { search, hash }, window: { Telegram }, Telegram };
+    const context = { location: { search, hash }, window: { Telegram }, Telegram, tgInitData: () => 'signed' };
     vm.createContext(context);
     vm.runInContext(flags, context);
-    return [context.GAME_ROOMS_API_TEST, context.GAME_LEADERBOARD_API_TEST];
+    return [context.GAME_ROOMS_API_TEST, context.GAME_LEADERBOARD_API_TEST, context.GAME_REALTIME_API_TEST];
   }
-  assert.deepEqual(evaluate('', ''), [false, false]);
-  assert.deepEqual(evaluate('', 'ru_test'), [true, true]);
-  assert.deepEqual(evaluate('?startapp=ru_test', ''), [true, true]);
-  assert.deepEqual(evaluate('', '', '#tgWebAppStartParam=ru_test'), [true, true]);
+  assert.deepEqual(evaluate('', ''), [false, false, false]);
+  assert.deepEqual(evaluate('', 'ru_test'), [true, true, false]);
+  assert.deepEqual(evaluate('?startapp=ru_test', ''), [true, true, false]);
+  assert.deepEqual(evaluate('', '', '#tgWebAppStartParam=ru_test'), [true, true, false]);
+  assert.deepEqual(evaluate('?realtime_api=1', ''), [false, false, true]);
 });
 
 test('leaderboard shows whether the Amvera request failed in test mode', async () => {
