@@ -151,7 +151,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', requestOrigin);
     res.header('Vary', 'Origin');
   }
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -449,6 +449,10 @@ app.post('/api/track', async (req, res) => {
 // this single Amvera process; hosts refresh their room every 25 seconds, so a
 // restart repopulates the list without adding constant writes to SQLite.
 const gameRooms = new Map();
+if (process.env.GAME_REALTIME_API_ENABLED === '1') {
+  const { createRealtimeRouter } = require('./realtime-http');
+  app.use('/api/game/realtime', createRealtimeRouter(validateInitData));
+}
 const GAME_ROOM_TTL_MS = 150000;
 function pruneGameRooms() {
   const now = Date.now();
