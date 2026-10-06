@@ -13,14 +13,15 @@ pre{white-space:pre-wrap;word-break:break-word;background:#1a1f2d;padding:12px;b
 </head>
 <body>
 <h3>Проверка связи с Amvera</h3>
-<p>Открой эту страницу в Safari на iPhone с включённым VPN. Нажми «Запустить», затем «Копировать». Проверка не отправляет данные игры и не делает покупок.</p>
-<button id="run">Запустить</button><button id="copy">Копировать</button>
+<p>Открой эту страницу в Safari на iPhone с включённым VPN. Нажми «Запустить» и дождись строки «ГОТОВО». Только после этого нажми «Копировать». Проверка не отправляет данные игры и не делает покупок.</p>
+<button id="run">Запустить</button><button id="copy" disabled>Копировать</button>
 <pre id="out">Ожидание…</pre>
 <script>
 (function () {
   var BASE = 'https://memy-millenialov-marco.amvera.io';
   var out = document.getElementById('out');
   var runButton = document.getElementById('run');
+  var copyButton = document.getElementById('copy');
   var lines = [];
   var badEnv = false;
   function log(text) { lines.push(text); out.textContent = lines.join('\n'); }
@@ -81,6 +82,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#1a1f2d;padding:12px;b
   }
   async function run() {
     runButton.disabled = true;
+    copyButton.disabled = true;
     lines = [];
     badEnv = false;
     var id = Math.random().toString(36).slice(2, 10);
@@ -90,13 +92,16 @@ pre{white-space:pre-wrap;word-break:break-word;background:#1a1f2d;padding:12px;b
       log('Сеть: online=' + navigator.onLine + (navigator.connection ? ', type=' + (navigator.connection.effectiveType || '?') : ''));
       log('Страница GitHub Pages загружена. Проверяем только соединение с Amvera.');
       log('\n[Amvera]');
-      var normal = await timed(BASE + '/api/diag/ping?id=' + id);
-      log('1. Обычный запрос: ' + format(normal));
-      var opaque = await timed(BASE + '/api/diag/ping?id=' + id + 'n', { mode: 'no-cors' });
-      log('2. Запрос без чтения ответа: ' + format(opaque));
-      log('3. Запрос с предварительной проверкой: ' + format(await timed(BASE + '/api/diag/ping?id=' + id + 'p', { headers: { Authorization: 'Bearer test' } })));
-      log('4. Рейтинг: ' + format(await timed(BASE + '/api/game/leaderboard?id=' + id, {}, 20000)));
-      log('5. Поток: ' + await stream(id));
+      log('Проверки идут параллельно. Это может занять до 30 секунд; не копируй текст пока нет строки «ГОТОВО».');
+      var results = await Promise.all([
+        timed(BASE + '/api/diag/ping?id=' + id).then(function (r) { log('1. Обычный запрос: ' + format(r)); return r; }),
+        timed(BASE + '/api/diag/ping?id=' + id + 'n', { mode: 'no-cors' }).then(function (r) { log('2. Запрос без чтения ответа: ' + format(r)); return r; }),
+        timed(BASE + '/api/diag/ping?id=' + id + 'p', { headers: { Authorization: 'Bearer test' } }).then(function (r) { log('3. Запрос с предварительной проверкой: ' + format(r)); return r; }),
+        timed(BASE + '/api/game/leaderboard?id=' + id, {}, 15000).then(function (r) { log('4. Рейтинг: ' + format(r)); return r; }),
+        stream(id).then(function (r) { log('5. Поток: ' + r); return r; })
+      ]);
+      var normal = results[0];
+      var opaque = results[1];
       log('\n[Вывод]');
       if (badEnv) log('ТЕСТ НЕДЕЙСТВИТЕЛЕН: среда не выполнила fetch. Открой страницу в Safari на iPhone, не внутри Claude.');
       else {
@@ -105,10 +110,11 @@ pre{white-space:pre-wrap;word-break:break-word;background:#1a1f2d;padding:12px;b
         else if (opaque.received) log('До адреса пришёл ответ, но обычный запрос не читается: возможны CORS или ошибка входного узла без CORS-заголовка.');
         else log('Ответа ни на один запрос нет. Возможны сеть/TLS или ошибка входного узла; сверь id со строками [http] в логе Amvera.');
       }
-    } finally { runButton.disabled = false; }
+      log('\nГОТОВО — теперь нажми «Копировать».');
+    } finally { runButton.disabled = false; copyButton.disabled = false; }
   }
   runButton.onclick = run;
-  document.getElementById('copy').onclick = function () {
+  copyButton.onclick = function () {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(lines.join('\n')).catch(function () { alert('Не удалось скопировать. Сделай скрин результата.'); });
     } else alert('Не удалось скопировать. Сделай скрин результата.');
