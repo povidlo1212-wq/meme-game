@@ -1,7 +1,8 @@
 'use strict';
 
 // Public Yandex Cloud Function entry point: yandex-function-proxy.handler.
-// This is a narrow bridge to game data on Amvera, never to bot or payment routes.
+// Narrow bridge to game data and Telegram premium-status checks on Amvera.
+// Never proxy bot or payment-creation routes.
 const AMVERA_ORIGIN = 'https://memy-millenialov-marco.amvera.io';
 const GAME_ORIGIN = 'https://povidlo1212-wq.github.io';
 const MAX_BODY_CHARS = 4096;
@@ -36,6 +37,8 @@ module.exports.handler = async function handler(event = {}) {
     path = '/api/game/rooms';
   } else if (operation === 'leaderboard' && (method === 'GET' || method === 'POST')) {
     path = '/api/game/leaderboard';
+  } else if (operation === 'access' && method === 'POST') {
+    path = '/api/check-access';
   } else {
     return response(404, JSON.stringify({ error: 'route not found' }), origin);
   }
@@ -54,11 +57,19 @@ module.exports.handler = async function handler(event = {}) {
         event.body.length > MAX_BODY_CHARS) {
       return response(400, JSON.stringify({ error: 'invalid request body' }), origin);
     }
-    try { JSON.parse(event.body); } catch {
+    let parsed;
+    try { parsed = JSON.parse(event.body); } catch {
       return response(400, JSON.stringify({ error: 'invalid JSON' }), origin);
     }
+    if (operation === 'access' &&
+        (!parsed || typeof parsed.initData !== 'string' ||
+         !parsed.initData || parsed.initData.length > 4000)) {
+      return response(400, JSON.stringify({ error: 'invalid access request' }), origin);
+    }
     options.headers = { 'Content-Type': 'application/json' };
-    options.body = event.body;
+    options.body = operation === 'access'
+      ? JSON.stringify({ initData: parsed.initData })
+      : event.body;
   }
 
   try {
