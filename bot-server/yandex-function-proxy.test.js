@@ -63,3 +63,39 @@ test('preflight, foreign origins and backend failures are handled without forwar
     assert.doesNotMatch(offline.body, /network details/);
   } finally { global.fetch = oldFetch; }
 });
+
+const gameOrigin = 'https://povidlo1212-wq.github.io';
+
+test('premium status is only available via validated POST', async () => {
+  const base = { headers: { origin: gameOrigin }, queryStringParameters: { op: 'access' } };
+  assert.equal((await handler({ ...base, httpMethod: 'GET' })).statusCode, 404);
+  assert.equal((await handler({ ...base, httpMethod: 'POST', body: '{}' })).statusCode, 400);
+  assert.equal((await handler({ ...base, httpMethod: 'POST', body: JSON.stringify({ initData: '' }) })).statusCode, 400);
+  assert.equal((await handler({ ...base, httpMethod: 'POST', body: JSON.stringify({ initData: 'x' }), headers: { origin: 'https://example.org' } })).statusCode, 403);
+});
+
+test('premium status forwards Telegram initData only to the Amvera access endpoint', async () => {
+  const oldFetch = global.fetch;
+  let upstream;
+  global.fetch = async (url, options) => {
+    upstream = { url: String(url), method: options.method, body: options.body };
+    return { status: 200, text: async () => '{"paid":true}' };
+  };
+  try {
+    const body = JSON.stringify({ initData: 'query_id=test&hash=test', platform: 'yandex', yaPlayerId: 'other-user' });
+    const result = await handler({
+      headers: { origin: gameOrigin },
+      queryStringParameters: { op: 'access' },
+      httpMethod: 'POST',
+      body,
+    });
+    assert.equal(upstream.url, 'https://memy-millenialov-marco.amvera.io/api/check-access');
+    assert.equal(upstream.method, 'POST');
+    assert.equal(upstream.body, JSON.stringify({ initData: 'query_id=test&hash=test' }));
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.headers['Access-Control-Allow-Origin'], gameOrigin);
+    assert.deepEqual(JSON.parse(result.body), { paid: true });
+  } finally {
+    global.fetch = oldFetch;
+  }
+});
