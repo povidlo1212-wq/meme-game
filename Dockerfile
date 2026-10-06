@@ -7,6 +7,8 @@ RUN npm ci --omit=dev
 
 COPY server.js ./
 COPY sqlite-store.js ./
+COPY realtime-http.js ./
+COPY realtime-room-hub.js ./
 COPY tbank-ca-bundle.pem ./
 
 # Amvera's network certificate chain requires this CA bundle for T-Bank.
