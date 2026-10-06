@@ -10,6 +10,24 @@ const end = html.indexOf("var COVER_URL=", start);
 assert.ok(start >= 0 && end > start);
 const roomClient = html.slice(start, end);
 
+test('Telegram test link enables both routes while normal launch stays unchanged', () => {
+  const flagStart = html.indexOf('var GAME_DATA_API_TEST=');
+  const flagEnd = html.indexOf('function leaderboardEscape(', flagStart);
+  assert.ok(flagStart >= 0 && flagEnd > flagStart);
+  const flags = html.slice(flagStart, flagEnd);
+  function evaluate(search, startParam, hash = '') {
+    const Telegram = { WebApp: { initDataUnsafe: { start_param: startParam } } };
+    const context = { location: { search, hash }, window: { Telegram }, Telegram };
+    vm.createContext(context);
+    vm.runInContext(flags, context);
+    return [context.GAME_ROOMS_API_TEST, context.GAME_LEADERBOARD_API_TEST];
+  }
+  assert.deepEqual(evaluate('', ''), [false, false]);
+  assert.deepEqual(evaluate('', 'ru_test'), [true, true]);
+  assert.deepEqual(evaluate('?startapp=ru_test', ''), [true, true]);
+  assert.deepEqual(evaluate('', '', '#tgWebAppStartParam=ru_test'), [true, true]);
+});
+
 function makeClient(testMode) {
   const requests = [];
   const storage = new Map();
