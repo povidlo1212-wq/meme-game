@@ -511,7 +511,9 @@ input:focus{border-color:#3a7bd5;}
 
 <script>
 (function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();var isMobilePlatform=tg.platform==='ios'||tg.platform==='android';if(!isMobilePlatform)return;tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();function applySafeArea(){try{if(!tg.isFullscreen){document.documentElement.style.setProperty('--safe-top','0px');return;}var s=tg.safeAreaInset||{},c=tg.contentSafeAreaInset||{},top=Math.min((s.top||0)+(c.top||0),90);document.documentElement.style.setProperty('--safe-top',top+'px');}catch(e){}}applySafeArea();if(typeof tg.onEvent==='function'){tg.onEvent('safeAreaChanged',applySafeArea);tg.onEvent('contentSafeAreaChanged',applySafeArea);tg.onEvent('fullscreenChanged',applySafeArea);}}catch(e){}})();
-var KINO_BACKEND_URL='https://memy-millenialov-marco.amvera.io';
+// The custom-domain probe is opt-in: regular players keep the existing backend.
+var GAME_CUSTOM_DOMAIN_TEST=(function(){var sp='';try{sp=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param||'';}catch(e){}return sp==='domain_test'||/(?:^|[?&#])(?:startapp|tgWebAppStartParam)=domain_test(?:[&#]|$)/.test(location.search+location.hash);})();
+var KINO_BACKEND_URL=GAME_CUSTOM_DOMAIN_TEST?'https://memymillenialov.site':'https://memy-millenialov-marco.amvera.io';
 function fetchBackend(path,options){
   return fetch(KINO_BACKEND_URL+path,options);
 }
@@ -985,7 +987,7 @@ function closeLeaderboard(){var modal=document.getElementById('leaderboard-modal
 // API route is reachable from Telegram on mobile VPN and its data is verified.
 // A dedicated Telegram deep link enables both Russian game-data routes for
 // one tester without changing the default for other players.
-var GAME_REALTIME_LINK_TEST=(function(){var sp='';try{sp=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param||'';}catch(e){}return sp==='rt_test'||/(?:^|[?&#])(?:startapp|tgWebAppStartParam)=rt_test(?:[&#]|$)/.test(location.search+location.hash);})();
+var GAME_REALTIME_LINK_TEST=(function(){var sp='';try{sp=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param||'';}catch(e){}return GAME_CUSTOM_DOMAIN_TEST||sp==='rt_test'||/(?:^|[?&#])(?:startapp|tgWebAppStartParam)=rt_test(?:[&#]|$)/.test(location.search+location.hash);})();
 var GAME_DATA_API_TEST=(function(){var sp='';try{sp=window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param||'';}catch(e){}return sp==='ru_test'||GAME_REALTIME_LINK_TEST||/(?:^|[?&#])(?:startapp|tgWebAppStartParam)=ru_test(?:[&#]|$)/.test(location.search+location.hash);})();
 var GAME_LEADERBOARD_API_TEST=GAME_DATA_API_TEST||/(?:^|[?&])leaderboard_api=1(?:&|$)/.test(location.search);
 var GAME_ROOMS_API_TEST=GAME_DATA_API_TEST||/(?:^|[?&])rooms_api=1(?:&|$)/.test(location.search);
