@@ -4,17 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Мемы Миллениалов</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="realtime-client.js"></script>
-<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
-<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@700;800;900&display=swap" media="print" onload="this.media='all'">
 <!-- App Check (reCAPTCHA v3) отключён: нужна регистрация провайдера в Firebase (только через reCAPTCHA Enterprise). Раскомментировать оба места при переходе на Enterprise.
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check-compat.js"></script> -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@700;800;900&display=swap');
 :root{--safe-top:0px;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Nunito',sans-serif;min-height:100vh;overflow:hidden;background:#1a3a7a;}
@@ -509,6 +502,16 @@ input:focus{border-color:#3a7bd5;}
   </div>
 </div>
 
+<!-- Render the static game menu before third-party SDK downloads. A stalled CDN
+     must not leave Telegram's webview completely white. Keep dependency order. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>try{window.Telegram&&Telegram.WebApp&&Telegram.WebApp.ready()}catch(e){}</script>
+<script src="realtime-client.js"></script>
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+<script src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 (function(){try{var tg=window.Telegram&&window.Telegram.WebApp;if(!tg)return;tg.ready();var isMobilePlatform=tg.platform==='ios'||tg.platform==='android';if(!isMobilePlatform)return;tg.expand();if(typeof tg.requestFullscreen==='function')tg.requestFullscreen();function applySafeArea(){try{if(!tg.isFullscreen){document.documentElement.style.setProperty('--safe-top','0px');return;}var s=tg.safeAreaInset||{},c=tg.contentSafeAreaInset||{},top=Math.min((s.top||0)+(c.top||0),90);document.documentElement.style.setProperty('--safe-top',top+'px');}catch(e){}}applySafeArea();if(typeof tg.onEvent==='function'){tg.onEvent('safeAreaChanged',applySafeArea);tg.onEvent('contentSafeAreaChanged',applySafeArea);tg.onEvent('fullscreenChanged',applySafeArea);}}catch(e){}})();
 // The custom-domain probe is opt-in: regular players keep the existing backend.
