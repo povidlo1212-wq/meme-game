@@ -870,6 +870,24 @@ async function reconcileTbankOrder(orderId) {
   return true;
 }
 
+async function reconcilePendingTbankOrders() {
+  if (!TBANK_ENABLED) return;
+  const snapshot = await db.ref('pendingPayments').get();
+  const pending = snapshot.val() || {};
+  const orders = Object.entries(pending).filter(([uid, entry]) =>
+    entry && entry.method === 'card' && typeof entry.orderId === 'string' &&
+    /^kino-\d+-\d+$/.test(entry.orderId) && entry.orderId.split('-')[1] === uid &&
+    Date.now() - Number(entry.startedAt) < 30 * DAY_MS
+  ).slice(0, 20);
+  for (const [, entry] of orders) {
+    try {
+      await reconcileTbankOrder(entry.orderId);
+    } catch (e) {
+      console.error('Pending T-Bank order check failed:', entry.orderId, e.message);
+    }
+  }
+}
+
 app.post('/tbank-notification', async (req, res) => {
   const body = req.body || {};
   if (!TBANK_ENABLED || typeof body.Token !== 'string' || body.TerminalKey !== TBANK_TERMINAL_KEY) {
@@ -1523,6 +1541,10 @@ if (require.main === module) {
       setTimeout(startPolling, 3000);
     });
     startPolling();
+    reconcilePendingTbankOrders().catch((e) => console.error('T-Bank reconciliation failed:', e));
+    setInterval(() => {
+      reconcilePendingTbankOrders().catch((e) => console.error('T-Bank reconciliation failed:', e));
+    }, 5 * 60 * 1000).unref();
   })).catch((error) => {
     console.error('Storage startup failed:', error.message);
     process.exit(1);
