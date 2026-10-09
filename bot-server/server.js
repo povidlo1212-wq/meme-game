@@ -267,20 +267,15 @@ async function getPaidRecord(telegramId) {
   }
 }
 
-// Grants `days` of premium starting now (self-purchase). Stars/card purchases
-// always start a fresh PREMIUM_DAYS window from the moment of payment.
+// A gateway may retry a confirmation. The charge id makes the grant idempotent:
+// a retry must neither extend premium again nor hide a failed database write.
 async function markPaid(telegramId, chargeId, days) {
   days = days || PREMIUM_DAYS;
-  try {
-    await db.ref('paidUsers/' + telegramId).set({
-      paidAt: SERVER_TIMESTAMP,
-      paidUntil: Date.now() + days * DAY_MS,
-      chargeId: chargeId || null,
-    });
-    await db.ref('pendingPayments/' + telegramId).remove().catch(() => {});
-  } catch (e) {
-    console.error('markPaid error:', e.message);
-  }
+  const result = await db.ref('paidUsers/' + telegramId).transaction((current) => {
+    if (chargeId && current && String(current.chargeId) === String(chargeId)) return;
+    return { paidAt: Date.now(), paidUntil: Date.now() + days * DAY_MS, chargeId: chargeId || null };
+  });
+  return result.committed;
 }
 
 // Random URL-safe gift token id.
@@ -303,6 +298,21 @@ async function createGiftToken(fromUid, kind, days) {
     claimedAt: null,
   });
   console.log('createGiftToken', token, 'from', fromUid, 'kind=' + kind, 'days=' + days);
+  return token;
+}
+
+// Persist the token choice before creating the gift. Replaying a payment can
+// then finish an interrupted gift creation without issuing a second gift.
+async function createGiftTokenForPayment(paymentKey, fromUid, kind, days) {
+  const keyRef = db.ref('paymentGiftTokens/' + paymentKey);
+  const proposed = genGiftToken();
+  const choice = await keyRef.transaction((current) => current || proposed);
+  const token = choice.snapshot.val();
+  const now = Date.now();
+  await db.ref('giftTokens/' + token).transaction((current) => current || {
+    fromUid: String(fromUid), kind, days, createdAt: now,
+    expiresAt: now + PREMIUM_DAYS * DAY_MS, claimedBy: null, claimedAt: null,
+  });
   return token;
 }
 
@@ -349,17 +359,8 @@ async function claimGiftToken(token, toUid) {
   return { ok: true, fromUid: data.fromUid, days };
 }
 
-// Payment gateways (Tinkoff, Telegram) can and do redeliver the same
-// confirmation more than once. Without this, a redelivered notification would
-// mint a second gift token and reset paidUntil again for the same purchase -
-// claim the order id atomically before acting on it so a retry is a no-op.
-async function claimPaymentOnce(key) {
-  const ref = db.ref('processedPayments/' + key);
-  const result = await ref.transaction((cur) => {
-    if (cur) return; // already claimed -> abort
-    return { at: Date.now() };
-  });
-  return result.committed;
+async function recordProcessedPayment(key) {
+  await db.ref('processedPayments/' + key).set({ at: Date.now(), state: 'completed' });
 }
 
 function giftLink(token) {
@@ -384,15 +385,12 @@ function giftReadyText(token) {
 
 // Track "a payment was started but not yet confirmed" so the support bot can
 // answer "did my payment go through" with a real, current status. No AI needed.
-async function markPending(telegramId, method) {
-  try {
-    await db.ref('pendingPayments/' + telegramId).set({
-      method: method,
-      startedAt: SERVER_TIMESTAMP,
-    });
-  } catch (e) {
-    console.error('markPending error:', e.message);
-  }
+async function markPending(telegramId, method, orderId) {
+  await db.ref('pendingPayments/' + telegramId).set({
+    method: method,
+    startedAt: SERVER_TIMESTAMP,
+    orderId: orderId || null,
+  });
 }
 
 async function getPending(telegramId) {
@@ -592,6 +590,9 @@ app.get('/api/game/leaderboard', async (_req, res) => {
 });
 
 app.post('/api/game/leaderboard', async (req, res) => {
+  if (!validateInitData(req.body && req.body.initData)) {
+    return res.status(401).json({ error: 'invalid initData' });
+  }
   if (!validateInitData(req.body && req.body.initData)) {
     return res.status(401).json({ error: 'invalid initData' });
   }
@@ -819,60 +820,84 @@ app.post('/api/create-tbank-payment', async (req, res) => {
       detail: result.Message || result.Details || `ErrorCode ${result.ErrorCode || '?'}`,
     });
   }
-  if (!isGift) markPending(user.id, 'card').catch(() => {});
+  console.log('T-Bank order initialized:', orderId, 'paymentId=', result.PaymentId);
+  if (!isGift) await markPending(user.id, 'card', orderId);
   res.json({ url: result.PaymentURL });
 });
 
 // --- T-Bank payment notification webhook ---
-app.post('/tbank-notification', async (req, res) => {
-  try {
-    const body = req.body || {};
-    const receivedToken = body.Token;
-    const check = Object.assign({}, body);
-    delete check.Token;
-    const expectedToken = tbankToken(check);
-
-    if (!TBANK_ENABLED || receivedToken !== expectedToken) {
-      console.error('T-Bank notification: bad token');
-      return res.send('OK');
-    }
-
-    if (body.Status === 'CONFIRMED' && typeof body.OrderId === 'string') {
-      const firstTime = await claimPaymentOnce('tbank_' + body.OrderId);
-      if (!firstTime) {
-        console.log('tbank-notification: duplicate delivery for', body.OrderId, '- skipping');
-        return res.send('OK');
-      }
-      const paymentId = body.PaymentId ? String(body.PaymentId) : null;
-      const giftMatch = body.OrderId.match(/^kino-gift-(\d+)-/);
-      const selfMatch = giftMatch ? null : body.OrderId.match(/^kino-(\d+)-/);
-      if (giftMatch) {
-        const buyerId = giftMatch[1];
-        const token = await createGiftToken(buyerId, 'purchased', GIFT_PURCHASED_DAYS);
-        try {
-          await tgCall('sendMessage', {
-            chat_id: buyerId,
-            text: giftReadyText(token),
-            reply_markup: RETURN_TO_GAME,
-          });
-        } catch (e) { /* best effort */ }
-      } else if (selfMatch) {
-        const telegramId = selfMatch[1];
-        await markPaid(telegramId, paymentId);
-        const bonusToken = await createGiftToken(telegramId, 'bonus', GIFT_BONUS_DAYS);
-        try {
-          await tgCall('sendMessage', {
-            chat_id: telegramId,
-            text: purchaseThanksText(bonusToken),
-            reply_markup: RETURN_TO_GAME,
-          });
-        } catch (e) { /* best effort */ }
-      }
-    }
-  } catch (e) {
-    console.error('tbank-notification error:', e);
+async function fulfillTbankPayment(body) {
+  const orderId = body.OrderId;
+  const giftMatch = /^kino-gift-(\d+)-(\d+)$/.exec(orderId);
+  const selfMatch = giftMatch ? null : /^kino-(\d+)-(\d+)$/.exec(orderId);
+  if (!giftMatch && !selfMatch) throw new Error('Unrecognized paid order');
+  if (!body.PaymentId) throw new Error('Confirmed order has no PaymentId');
+  const key = 'tbank_' + orderId;
+  const processed = await db.ref('processedPayments/' + key).get();
+  if (processed.val() && processed.val().state === 'completed') return;
+  const telegramId = (giftMatch || selfMatch)[1];
+  let message;
+  if (giftMatch) {
+    const token = await createGiftTokenForPayment(key, telegramId, 'purchased', GIFT_PURCHASED_DAYS);
+    message = giftReadyText(token);
+  } else {
+    await markPaid(telegramId, String(body.PaymentId));
+    const token = await createGiftTokenForPayment(key, telegramId, 'bonus', GIFT_BONUS_DAYS);
+    message = purchaseThanksText(token);
   }
-  res.send('OK');
+  await recordProcessedPayment(key);
+  if (selfMatch) await db.ref('pendingPayments/' + telegramId).remove().catch((e) => {
+    console.error('pendingPayments cleanup error:', e.message);
+  });
+  console.log('T-Bank payment fulfilled:', orderId, 'for', telegramId);
+  await tgCall('sendMessage', { chat_id: telegramId, text: message, reply_markup: RETURN_TO_GAME });
+}
+
+// Use the bank's authenticated status endpoint when its HTTP notification was
+// lost. Never infer a successful charge from a receipt, redirect, or client UI.
+async function reconcileTbankOrder(orderId) {
+  if (!TBANK_ENABLED || !/^kino-(?:gift-)?\d+-\d+$/.test(orderId)) throw new Error('Invalid order');
+  const result = await tbankCall('CheckOrder', { OrderId: orderId });
+  if (!result.Success || result.OrderId !== orderId || result.TerminalKey !== TBANK_TERMINAL_KEY) {
+    throw new Error('T-Bank could not verify order');
+  }
+  const payment = Array.isArray(result.Payments) && result.Payments.find((item) =>
+    item.Status === 'CONFIRMED' && item.PaymentId && Number(item.Amount) === TBANK_PRICE_RUB * 100 &&
+    (item.Success === true || item.Success === 'true')
+  );
+  if (!payment) return false;
+  await fulfillTbankPayment({ OrderId: orderId, PaymentId: payment.PaymentId });
+  return true;
+}
+
+app.post('/tbank-notification', async (req, res) => {
+  const body = req.body || {};
+  if (!TBANK_ENABLED || typeof body.Token !== 'string' || body.TerminalKey !== TBANK_TERMINAL_KEY) {
+    console.error('T-Bank notification: missing credentials or wrong terminal');
+    return res.status(401).send('Invalid notification');
+  }
+  const check = { ...body };
+  delete check.Token;
+  const expectedToken = tbankToken(check);
+  const received = Buffer.from(body.Token, 'utf8');
+  const expected = Buffer.from(expectedToken, 'utf8');
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
+    console.error('T-Bank notification: bad token');
+    return res.status(401).send('Invalid notification');
+  }
+  console.log('T-Bank notification received:', body.Status, body.OrderId);
+  if (body.Status !== 'CONFIRMED') return res.send('OK');
+  if (body.Success !== true || !Number.isInteger(Number(body.Amount)) || Number(body.Amount) !== TBANK_PRICE_RUB * 100) {
+    console.error('T-Bank notification: invalid confirmed amount or success flag', body.OrderId);
+    return res.status(400).send('Invalid payment');
+  }
+  try {
+    await fulfillTbankPayment(body);
+    return res.send('OK');
+  } catch (e) {
+    console.error('tbank-notification processing failed:', body.OrderId, e);
+    return res.status(500).send('Processing failed');
+  }
 });
 
 app.get('/tbank-success', (req, res) => res.send('Оплата прошла успешно! Возвращайся в игру в Telegram.'));
@@ -1062,7 +1087,16 @@ function fmtAgo(ms) {
 }
 
 async function paymentStatusText(tgId) {
-  const [paidRec, pending] = await Promise.all([getPaidRecord(tgId), getPending(tgId)]);
+  const pending = await getPending(tgId);
+  if (pending && pending.method === 'card' && pending.orderId &&
+      /^kino-\d+-\d+$/.test(pending.orderId) && pending.orderId.split('-')[1] === String(tgId)) {
+    try {
+      await reconcileTbankOrder(pending.orderId);
+    } catch (e) {
+      console.error('T-Bank status reconciliation failed:', pending.orderId, e.message);
+    }
+  }
+  const paidRec = await getPaidRecord(tgId);
   if (paidRec) {
     if (typeof paidRec.paidUntil === 'number') {
       if (paidRec.paidUntil <= Date.now()) {
@@ -1228,7 +1262,8 @@ async function sendBotPayment(chatId, telegramId, method, isGift) {
     if (result) console.error('Bot T-Bank Init failed:', JSON.stringify(result));
     return tgCall('sendMessage', { chat_id: chatId, text: 'Не получилось создать ссылку на оплату картой/СБП. Попробуй позже или напиши в поддержку.' });
   }
-  if (!isGift) markPending(telegramId, 'card').catch(() => {});
+  console.log('T-Bank order initialized:', orderId, 'paymentId=', result.PaymentId);
+  if (!isGift) await markPending(telegramId, 'card', orderId);
   return tgCall('sendMessage', {
     chat_id: chatId,
     text: `Ссылка на оплату ${isGift ? 'подарка' : 'премиума'} картой или через СБП готова. Нажми кнопку ниже:`,
@@ -1273,6 +1308,23 @@ async function handleTextMessage(msg) {
   const chatId = msg.chat.id;
   const raw = String(msg.text || '').trim();
   if (!raw) return;
+
+  // Owner-only recovery for a historical order whose callback was lost before
+  // we began saving OrderId with pending payments. The bank must confirm it.
+  if (OWNER && String(from.id) === OWNER && msg.chat.type === 'private' && raw.startsWith('/reconcile ')) {
+    const orderId = raw.slice('/reconcile '.length).trim();
+    try {
+      const confirmed = await reconcileTbankOrder(orderId);
+      await tgCall('sendMessage', {
+        chat_id: chatId,
+        text: confirmed ? `Банк подтвердил заказ ${orderId}; доступ восстановлен.` : `Заказ ${orderId} пока не имеет подтверждённой оплаты в банке.`,
+      });
+    } catch (e) {
+      console.error('Owner payment reconciliation failed:', orderId, e);
+      await tgCall('sendMessage', { chat_id: chatId, text: `Не удалось проверить заказ ${orderId}. Доступ не менялся.` });
+    }
+    return;
+  }
 
   if (!rlOk(from.id)) {
     await tgCall('sendMessage', { chat_id: chatId, text: 'Слишком много сообщений подряд. Подожди пару минут 🙏' });
@@ -1361,18 +1413,24 @@ async function processTelegramUpdate(update) {
     if (update.message && update.message.successful_payment) {
       const msg = update.message;
       const sp = msg.successful_payment;
-      const firstTime = await claimPaymentOnce('stars_' + sp.telegram_payment_charge_id);
-      if (!firstTime) {
+      const key = 'stars_' + sp.telegram_payment_charge_id;
+      const previous = await db.ref('processedPayments/' + key).get();
+      if (previous.val() && previous.val().state === 'completed') {
         console.log('successful_payment: duplicate delivery for', sp.telegram_payment_charge_id, '- skipping');
         return;
       }
       const payload = String(sp.invoice_payload || '');
       if (payload.startsWith('gift_access_')) {
-        const token = await createGiftToken(msg.from.id, 'purchased', GIFT_PURCHASED_DAYS);
+        const token = await createGiftTokenForPayment(key, msg.from.id, 'purchased', GIFT_PURCHASED_DAYS);
+        await recordProcessedPayment(key);
         await tgCall('sendMessage', { chat_id: msg.chat.id, text: giftReadyText(token), reply_markup: RETURN_TO_GAME });
       } else {
         await markPaid(msg.from.id, sp.telegram_payment_charge_id);
-        const bonusToken = await createGiftToken(msg.from.id, 'bonus', GIFT_BONUS_DAYS);
+        const bonusToken = await createGiftTokenForPayment(key, msg.from.id, 'bonus', GIFT_BONUS_DAYS);
+        await recordProcessedPayment(key);
+        await db.ref('pendingPayments/' + msg.from.id).remove().catch((e) => {
+          console.error('pendingPayments cleanup error:', e.message);
+        });
         await tgCall('sendMessage', { chat_id: msg.chat.id, text: purchaseThanksText(bonusToken), reply_markup: RETURN_TO_GAME });
       }
       return;
