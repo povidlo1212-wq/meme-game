@@ -622,14 +622,8 @@ function updateHomeAccessUI(){
 function updatePremiumConnectionWarning(){var w=document.getElementById('premium-connection-warning');if(w)w.style.display=__accessConnectionFailed?'block':'none';}
 function openPremiumModal(){updatePremiumConnectionWarning();var m=document.getElementById('premium-modal');if(m)m.classList.add('open');}
 function closePremiumModal(){var m=document.getElementById('premium-modal');if(m)m.classList.remove('open');}
-// The matching bot-server build is deployed on Amvera and Telegram's webhook
-// points there. GitHub Pages deploys independently.
+// Keep the bot as a fallback when the Mini App cannot reach the payment API.
 var BOT_PAYMENT_FALLBACK_READY=true;
-function useBotPaymentOnThisDevice(){
-  var tg=window.Telegram&&Telegram.WebApp;
-  if(!tg)return false;
-  return /^(ios|android|android_x)$/.test(tg.platform||'')||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
-}
 function offerPaymentViaBot(method,isGift){
   if(!BOT_PAYMENT_FALLBACK_READY){alert('Не удалось связаться с сервером оплаты. Если включён VPN, попробуй другую сеть. Если премиум уже куплен, не плати повторно.');return;}
   if(!window.Telegram||!Telegram.WebApp){alert('Чтобы продолжить оплату, открой игру через Telegram-бота.');return;}
@@ -691,7 +685,6 @@ function checkPendingCardPurchase(){
   }
 }
 function buyKinoAccess(){
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('stars',false);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
   fetchBackend('/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
@@ -716,7 +709,6 @@ function openGiftModal(){var m=document.getElementById('gift-modal');if(m)m.clas
 function closeGiftModal(){var m=document.getElementById('gift-modal');if(m)m.classList.remove('open');}
 function closeGiftShareModal(){var m=document.getElementById('gift-share-modal');if(m)m.classList.remove('open');}
 function buyGiftPremium(){
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('stars',true);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
   fetchBackend('/api/create-invoice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
@@ -732,7 +724,6 @@ function buyGiftPremium(){
     .catch(function(){offerPaymentViaBot('stars',true);});
 }
 function buyGiftPremiumCard(){
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('card',true);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить подарок, открой игру через Telegram-бота.');return;}
   fetchBackend('/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData,gift:true})})
@@ -816,7 +807,6 @@ function celebrateConfetti(){
   }catch(e){}
 }
 function buyKinoAccessCard(){
-  if(BOT_PAYMENT_FALLBACK_READY&&(__accessConnectionFailed||useBotPaymentOnThisDevice())){offerPaymentViaBot('card',false);return;}
   var initData=tgInitData();
   if(!initData){alert('Чтобы купить доступ, открой игру через Telegram-бота.');return;}
   fetchBackend('/api/create-tbank-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:initData})})
