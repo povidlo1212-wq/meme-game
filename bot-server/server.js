@@ -321,37 +321,42 @@ async function createGiftTokenForPayment(paymentKey, fromUid, kind, days) {
 async function claimGiftToken(token, toUid) {
   toUid = String(toUid);
   const ref = db.ref('giftTokens/' + token);
-  let aborted = null;
-  let sawBefore = null;
-  const result = await ref.transaction((cur) => {
-    sawBefore = cur; // last state the callback actually saw (may run more than once on retry)
-    if (!cur) { aborted = 'not_found'; return; }
-    if (cur.claimedBy) { aborted = 'claimed'; return; }
-    if (cur.expiresAt && cur.expiresAt < Date.now()) { aborted = 'expired'; return; }
-    if (String(cur.fromUid) === toUid) { aborted = 'self'; return; }
-    cur.claimedBy = toUid;
-    cur.claimedAt = Date.now();
-    return cur;
-  });
-  console.log(
-    'claimGiftToken', token, 'by', toUid,
-    'committed=' + result.committed, 'reason=' + aborted,
-    'sawBefore=' + JSON.stringify(sawBefore),
-  );
-  if (!result.committed) return { ok: false, reason: aborted || 'claimed' };
-  const data = result.snapshot.val();
+  const giftSnap = await ref.get();
+  if (!giftSnap.exists()) return { ok: false, reason: 'not_found' };
+  const data = giftSnap.val();
+  if (data.expiresAt && data.expiresAt < Date.now()) return { ok: false, reason: 'expired' };
+  if (String(data.fromUid) === toUid) return { ok: false, reason: 'self' };
+
+  // A transaction on the whole gift can initially see null despite the gift
+  // existing remotely. Claim only the initially-null owner field instead.
+  const claim = await db.ref('giftTokens/' + token + '/claimedBy')
+    .transaction((current) => current ? undefined : toUid);
+  if (String(claim.snapshot.val()) !== toUid) return { ok: false, reason: 'claimed' };
+
   const days = data.days || GIFT_BONUS_DAYS;
   try {
-    const prevSnap = await db.ref('paidUsers/' + toUid).get();
-    const prev = prevSnap.exists() ? prevSnap.val() : null;
-    const stillActive = prev && typeof prev.paidUntil === 'number' && prev.paidUntil > Date.now();
-    const base = stillActive ? prev.paidUntil : Date.now();
-    await db.ref('paidUsers/' + toUid).set({
-      paidAt: (prev && prev.paidAt) || SERVER_TIMESTAMP,
-      paidUntil: base + days * DAY_MS,
-      chargeId: (prev && prev.chargeId) || null,
-      giftFrom: data.fromUid,
+    const paidRef = db.ref('paidUsers/' + toUid);
+    const prevSnap = await paidRef.get();
+    const fallback = prevSnap.exists() ? prevSnap.val() : null;
+    // Keep the token in the same atomic write as the entitlement. If the bot
+    // restarts after writing but before replying, a retry cannot grant twice.
+    await paidRef.transaction((current) => {
+      const prev = current || fallback || {};
+      const giftClaims = prev.giftClaims || {};
+      if (giftClaims[token]) return;
+      const now = Date.now();
+      const lifetime = Object.keys(prev).length > 0 && typeof prev.paidUntil !== 'number';
+      const base = typeof prev.paidUntil === 'number' && prev.paidUntil > now ? prev.paidUntil : now;
+      return {
+        ...prev,
+        paidAt: prev.paidAt || SERVER_TIMESTAMP,
+        ...(lifetime ? {} : { paidUntil: base + days * DAY_MS }),
+        giftFrom: data.fromUid,
+        giftClaims: { ...giftClaims, [token]: true },
+      };
     });
+    await ref.update({ claimedAt: Date.now() });
+    console.log('claimGiftToken granted', token, 'to', toUid, 'days=' + days);
   } catch (e) {
     console.error('claimGiftToken grant error:', e.message);
     return { ok: false, reason: 'error' };
